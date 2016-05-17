@@ -20,7 +20,11 @@ import com.netflix.spinnaker.clouddriver.model.HealthState
 import com.netflix.spinnaker.clouddriver.model.Instance
 import com.netflix.spinnaker.clouddriver.model.ServerGroup
 import groovy.transform.EqualsAndHashCode
-import org.cloudfoundry.client.lib.domain.CloudApplication
+import org.cloudfoundry.operations.applications.ApplicationDetail
+import org.cloudfoundry.operations.applications.ApplicationEnvironments
+import org.cloudfoundry.operations.organizations.OrganizationDetail
+import org.cloudfoundry.operations.spaces.SpaceDetail
+
 /**
  * A Cloud Foundry application combined with its org/space coordinates.
  */
@@ -29,7 +33,7 @@ class CloudFoundryServerGroup implements ServerGroup, Serializable {
 
   String name
   String type = 'cf'
-  CloudApplication nativeApplication
+  ApplicationDetail nativeApplication
   Boolean disabled = true
   Set<CloudFoundryApplicationInstance> instances = new HashSet<>()
   int memory
@@ -40,10 +44,14 @@ class CloudFoundryServerGroup implements ServerGroup, Serializable {
   Map buildInfo
   String consoleLink
   String logsLink
+  ApplicationEnvironments environments
+  OrganizationDetail org
+  SpaceDetail space
+
 
   @Override
   String getRegion() {
-    nativeApplication.space.organization.name
+    org.name
   }
 
   @Override
@@ -60,13 +68,13 @@ class CloudFoundryServerGroup implements ServerGroup, Serializable {
     if (this.instances.size() > 0) {
       this.instances.collect { it.launchTime }.min()
     } else {
-      nativeApplication?.meta?.updated?.time
+      nativeApplication?.lastUploaded.time
     }
   }
 
   @Override
   Set<String> getZones() {
-    Collections.singleton(nativeApplication.space.name)
+    Collections.singleton(space.name)
   }
 
   @Override
@@ -80,7 +88,7 @@ class CloudFoundryServerGroup implements ServerGroup, Serializable {
 
   @Override
   Map<String, Object> getLaunchConfig() {
-    nativeApplication.envAsMap
+    environments.userProvided
   }
 
   @Override

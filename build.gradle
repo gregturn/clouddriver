@@ -107,6 +107,13 @@ allprojects {
           if (it.requested.group.startsWith('org.apache.tomcat')) {
             it.useVersion spinnaker.version('tomcat')
           }
+
+          if (it.requested.group == 'io.projectreactor' && it.requested.name == 'reactor-core') {
+            it.useVersion '3.0.2.RELEASE'
+          }
+          if (it.requested.group == 'org.cloudfoundry') {
+            it.useVersion '2.0.1.RELEASE'
+          }
         }
       }
     }

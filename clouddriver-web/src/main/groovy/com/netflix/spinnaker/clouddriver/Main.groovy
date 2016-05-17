@@ -37,6 +37,7 @@ import org.springframework.boot.autoconfigure.batch.BatchAutoConfiguration
 import org.springframework.boot.autoconfigure.groovy.template.GroovyTemplateAutoConfiguration
 import org.springframework.boot.builder.SpringApplicationBuilder
 import org.springframework.boot.web.support.SpringBootServletInitializer
+import org.springframework.cloud.deployer.spi.cloudfoundry.CloudFoundryDeployerAutoConfiguration
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.ComponentScan
 import org.springframework.context.annotation.Configuration
@@ -71,7 +72,8 @@ import java.security.Security
 @EnableAutoConfiguration(exclude = [
     BatchAutoConfiguration,
     GroovyTemplateAutoConfiguration,
-    EndpointMBeanExportAutoConfiguration
+    EndpointMBeanExportAutoConfiguration,
+    CloudFoundryDeployerAutoConfiguration
 ])
 @EnableScheduling
 class Main extends SpringBootServletInitializer {

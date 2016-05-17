@@ -33,18 +33,38 @@ import com.netflix.spinnaker.clouddriver.cf.cache.Keys
 import com.netflix.spinnaker.clouddriver.cf.config.CloudFoundryConstants
 import com.netflix.spinnaker.clouddriver.cf.model.CloudFoundryService
 import com.netflix.spinnaker.clouddriver.cf.provider.CloudFoundryProvider
-import com.netflix.spinnaker.clouddriver.cf.provider.ProviderUtils
 import com.netflix.spinnaker.clouddriver.cf.security.CloudFoundryAccountCredentials
 import com.netflix.spinnaker.clouddriver.cf.utils.CloudFoundryClientFactory
-import org.cloudfoundry.client.lib.CloudFoundryException
-import org.cloudfoundry.client.lib.CloudFoundryOperations
-import org.cloudfoundry.client.lib.domain.*
+import org.cloudfoundry.client.CloudFoundryClient
+import org.cloudfoundry.client.v2.servicebindings.ListServiceBindingsRequest
+import org.cloudfoundry.client.v2.serviceinstances.GetServiceInstanceRequest
+import org.cloudfoundry.client.v2.serviceinstances.ServiceInstanceEntity
+import org.cloudfoundry.operations.CloudFoundryOperations
+import org.cloudfoundry.operations.applications.*
+import org.cloudfoundry.operations.organizations.OrganizationDetail
+import org.cloudfoundry.operations.organizations.OrganizationInfoRequest
+import org.cloudfoundry.operations.routes.Level
+import org.cloudfoundry.operations.routes.ListRoutesRequest
+import org.cloudfoundry.operations.routes.Route
+import org.cloudfoundry.operations.services.ServiceInstance
+import org.cloudfoundry.operations.spaces.GetSpaceRequest
+import org.cloudfoundry.operations.spaces.SpaceDetail
+import org.cloudfoundry.util.PaginationUtils
+import org.cloudfoundry.util.ResourceUtils
+import org.cloudfoundry.util.tuple.Function2
+import org.cloudfoundry.util.tuple.Predicate2
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import reactor.core.publisher.Flux
+import reactor.core.publisher.Mono
+
+import java.time.Duration
 
 import static com.netflix.spinnaker.cats.agent.AgentDataType.Authority.AUTHORITATIVE
 import static com.netflix.spinnaker.cats.agent.AgentDataType.Authority.INFORMATIVE
 import static com.netflix.spinnaker.clouddriver.cf.cache.Keys.Namespace.*
+import static org.cloudfoundry.util.tuple.TupleUtils.function
+import static org.cloudfoundry.util.tuple.TupleUtils.predicate
 
 class ClusterCachingAgent implements CachingAgent, OnDemandAgent, AccountAware {
 
@@ -151,29 +171,15 @@ class ClusterCachingAgent implements CachingAgent, OnDemandAgent, AccountAware {
 
     String serverGroupName = data.serverGroupName.toString()
 
+    def operations = cloudFoundryClientFactory.createCloudFoundryOperations(account, true)
     def client = cloudFoundryClientFactory.createCloudFoundryClient(account, true)
 
-    def spaces = loadSpaces(client)
-    def currentSpace = spaces.values().find { it?.name == account.space && it?.organization.name == account.org }
-    def services = loadServices(client, currentSpace)
-    def routes = loadRoutes(client)
-
-    Collection<AppAndInstances> onDemandData = metricsSupport.readData {
-      try {
-        def application = client.getApplication(serverGroupName)
-        [
-            new AppAndInstances(
-                app: application,
-                instancesInfo: client.getApplicationInstances(application)
-            )
-        ]
-      } catch (CloudFoundryException e) {
-        []
-      }
-    }
+    SpaceDetail currentSpace = lookupCurrentSpace(operations).block(Duration.ofMinutes(5))
+    OrganizationDetail currentOrg = lookupCurrentOrg(operations).block(Duration.ofMinutes(5))
+    List<Route> routes = lookupRoutes(operations).collectList().block(Duration.ofSeconds(30))
 
     def cacheResult = metricsSupport.transformData {
-      buildCacheResult(onDemandData, currentSpace, services, routes, [:], [], Long.MAX_VALUE)
+      buildCacheResult(operations, client, currentOrg, currentSpace, routes, [:], [], Long.MAX_VALUE)
     }
 
     if (cacheResult.cacheResults.values().flatten().isEmpty()) {
@@ -181,12 +187,13 @@ class ClusterCachingAgent implements CachingAgent, OnDemandAgent, AccountAware {
       providerCache.evictDeletedItems(ON_DEMAND.ns, [Keys.getServerGroupKey(serverGroupName, account.name, account.org)])
     } else {
       metricsSupport.onDemandStore {
+        def resultsAsJson = objectMapper.writeValueAsString(cacheResult.cacheResults)
         def cacheData = new DefaultCacheData(
             Keys.getServerGroupKey(serverGroupName, account.name, account.org),
             10 * 60,
             [
                 cacheTime     : System.currentTimeMillis(),
-                cacheResults  : objectMapper.writeValueAsString(cacheResult.cacheResults),
+                cacheResults  : resultsAsJson,
                 processedCount: 0,
                 processedTime : null
             ],
@@ -196,6 +203,15 @@ class ClusterCachingAgent implements CachingAgent, OnDemandAgent, AccountAware {
         providerCache.putCacheData(ON_DEMAND.ns, cacheData)
       }
     }
+
+    Collection<ApplicationDetail> onDemandData = [metricsSupport.readData {
+
+      operations.applications()
+          .get(GetApplicationRequest.builder()
+          .name(serverGroupName)
+          .build())
+    }
+    .block(Duration.ofSeconds(30))] ?: []
 
     Map<String, Collection<String>> evictions = !onDemandData.isEmpty() ? [:] : [
         (SERVER_GROUPS.ns): [
@@ -208,6 +224,27 @@ class ClusterCachingAgent implements CachingAgent, OnDemandAgent, AccountAware {
     return new OnDemandAgent.OnDemandResult(
         sourceAgentType: getOnDemandAgentType(), cacheResult: cacheResult, evictions: evictions
     )
+  }
+
+  private Flux<Route> lookupRoutes(CloudFoundryOperations operations) {
+    operations.routes()
+      .list(ListRoutesRequest.builder()
+        .level(Level.SPACE)
+        .build())
+  }
+
+  private Mono<SpaceDetail> lookupCurrentSpace(CloudFoundryOperations operations) {
+    operations.spaces()
+      .get(GetSpaceRequest.builder()
+        .name(account.space)
+        .build())
+  }
+
+  private Mono<OrganizationDetail> lookupCurrentOrg(CloudFoundryOperations operations) {
+    operations.organizations()
+      .get(OrganizationInfoRequest.builder()
+        .name(account.org)
+        .build())
   }
 
   @Override
@@ -230,23 +267,20 @@ class ClusterCachingAgent implements CachingAgent, OnDemandAgent, AccountAware {
 
     log.info "Describing items in ${agentType}"
 
+    def operations = cloudFoundryClientFactory.createCloudFoundryOperations(account, true)
     def client = cloudFoundryClientFactory.createCloudFoundryClient(account, true)
 
-    def spaces = loadSpaces(client)
-    def currentSpace = spaces.values().find { it?.name == account.space && it?.organization.name == account.org }
-    def services = loadServices(client, currentSpace)
-    def routes = loadRoutes(client)
+    def currentOrg = lookupCurrentOrg(operations).block(Duration.ofMinutes(5))
+    def currentSpace = lookupCurrentSpace(operations).block(Duration.ofMinutes(5))
+    def routes = lookupRoutes(operations).collectList().block(Duration.ofSeconds(30))
 
-    Collection<AppAndInstances> appsAndInstances = client.applications.collect { app ->
-      new AppAndInstances(app: app, instancesInfo: client.getApplicationInstances(app))
-    }
+    List<ApplicationSummary> apps = operations.applications().list().collectList().block(Duration.ofSeconds(30))
 
     def evictableOnDemandCacheDatas = []
     def keepInOnDemand = []
 
-    providerCache.getAll(ON_DEMAND.ns, appsAndInstances.collect {
-      appAndInstances -> Keys.getServerGroupKey(appAndInstances.app.name, account.name, account.org)
-    }).each {
+    providerCache.getAll(ON_DEMAND.ns, apps
+        .collect({app -> Keys.getServerGroupKey(app.name, account.name, account.org)})).each {
       if (new Long(it.attributes.cacheTime) < start && it.attributes.processedCount > 0) {
         evictableOnDemandCacheDatas << it
       } else {
@@ -256,7 +290,7 @@ class ClusterCachingAgent implements CachingAgent, OnDemandAgent, AccountAware {
 
     def stuffToConsider = keepInOnDemand.collectEntries { [(it.id), it] }
 
-    def result = buildCacheResult(appsAndInstances, currentSpace, services, routes,
+    def result = buildCacheResult(operations, client, currentOrg, currentSpace, routes,
         stuffToConsider, evictableOnDemandCacheDatas*.id, start)
 
     result.cacheResults[ON_DEMAND.ns].each {
@@ -267,42 +301,11 @@ class ClusterCachingAgent implements CachingAgent, OnDemandAgent, AccountAware {
     result
   }
 
-  private Set<CloudRoute> loadRoutes(CloudFoundryOperations client) {
-    log.info "Looking up routes for ${agentType}"
-    Set<CloudRoute> routes = [] as Set<CloudRoute>
-    client.domainsForOrg.each { domain ->
-      client.getRoutes(domain.name).each { route ->
-        routes.add(route)
-      }
-    }
-    routes
-  }
-
-  private Map<String, Set<CloudService>> loadServices(CloudFoundryOperations client, currentSpace) {
-    log.info "Looking up services for ${agentType}"
-    Map<String, Set<CloudService>> services = [:].withDefault { [] as Set<CloudService> }
-    client.services.each { service ->
-      services[currentSpace.meta.guid].add(service)
-    }
-    services
-  }
-
-  private LinkedHashMap<String, CloudSpace> loadSpaces(CloudFoundryOperations client) {
-    log.info "Looking up spaces for ${agentType}"
-    Map<String, CloudSpace> spaces = [:]
-    client.spaces.each { space ->
-      if (!spaces.containsKey(space.meta.guid) && space.name == account.space) {
-        log.info "Storing space ${space.name} in ${agentType}"
-        spaces[space.meta.guid] = space
-      }
-    }
-    spaces
-  }
-
-  private CacheResult buildCacheResult(Collection<AppAndInstances> appsAndInstances,
-                                       CloudSpace currentSpace,
-                                       Map<String, Set<CloudService>> services,
-                                       Set<CloudRoute> routes,
+  private CacheResult buildCacheResult(CloudFoundryOperations operations,
+                                        CloudFoundryClient client,
+                                       OrganizationDetail currentOrg,
+                                       SpaceDetail currentSpace,
+                                       Collection<Route> routes,
                                        Map<String, CacheData> onDemandKeep,
                                        Collection<String> evictableOnDemandCacheDataIdentifiers,
                                        Long start) {
@@ -313,49 +316,34 @@ class ClusterCachingAgent implements CachingAgent, OnDemandAgent, AccountAware {
     Map<String, CacheData> instances = cache()
     Map<String, CacheData> loadBalancers = cache()
 
-    appsAndInstances.findAll {
-      it.app.envAsMap.containsKey(CloudFoundryConstants.LOAD_BALANCERS) // Skip apps not fully created
-    }.each { appAndInstances ->
-
-      def app = appAndInstances.app
-
-      app.space = currentSpace // For some reason, app.space's org is null
-
-      def onDemandData = onDemandKeep ?
-          onDemandKeep[Keys.getServerGroupKey(app.name, account.name, app.space.organization.name)] : null
-
-      if (onDemandData && new Long(onDemandData.attributes.cacheTime) >= start) {
-        log.info("Using onDemand cache value (${onDemandData.id})")
-        Map<String, List<CacheData>> cacheResults = objectMapper.readValue(onDemandData.attributes.cacheResults as String, new TypeReference<Map<String, List<MutableCacheData>>>() {})
-
-        cacheResults["instances"].each {
-          it.attributes.nativeInstance = ProviderUtils.buildNativeInstance(it.attributes.nativeInstance)
-        }
-
-        cacheResults["serverGroups"].each {
-          it.attributes.nativeApplication = ProviderUtils.buildNativeApplication(it.attributes.nativeApplication)
-          it.attributes.services.each {
-            it.nativeService = ProviderUtils.buildNativeService(it.nativeService)
-          }
-        }
-        cache(cacheResults, APPLICATIONS.ns, applications)
-        cache(cacheResults, CLUSTERS.ns, clusters)
-        cache(cacheResults, SERVER_GROUPS.ns, serverGroups)
-        cache(cacheResults, INSTANCES.ns, instances)
-        cache(cacheResults, LOAD_BALANCERS.ns, loadBalancers)
-      } else {
-        try {
-          CloudFoundryData data = new CloudFoundryData(app, account.name, appAndInstances.instancesInfo?.instances, routes)
-          cacheApplications(data, applications)
-          cacheCluster(data, clusters)
-          cacheServerGroup(data, serverGroups, currentSpace, services)
-          cacheInstances(data, instances)
-          cacheLoadBalancers(data, loadBalancers)
-        } catch (Exception e) {
-          log.warn("Failed to cache ${app.name} in ${account.name}", e)
-        }
-      }
-    }
+    operations.applications()
+      .list()
+      .flatMap({ ApplicationSummary appSummary ->
+        operations.applications()
+          .getEnvironments(GetApplicationEnvironmentsRequest.builder()
+            .name(appSummary.name)
+            .build())
+          .and(Mono.just(appSummary))
+      })
+      .log('mapAppToEnv')
+      .filter(predicate({ ApplicationEnvironments environments, ApplicationSummary application ->
+        environments?.userProvided?.containsKey(CloudFoundryConstants.LOAD_BALANCERS) ?: false
+      } as Predicate2))
+      .log('filterForLoadBalancers')
+      .flatMap(function({ ApplicationEnvironments environments, ApplicationSummary application ->
+        operations.applications()
+          .get(GetApplicationRequest.builder()
+            .name(application.name)
+            .build())
+          .and(Mono.just(environments))
+      } as Function2))
+      .log('getApplicationDetails')
+      .flatMap(function({ ApplicationDetail app, ApplicationEnvironments environments ->
+        cacheUpResults(app, applications, clusters, instances, loadBalancers, serverGroups, currentOrg, currentSpace, account, objectMapper, start, operations, client, onDemandKeep, environments)
+      } as Function2))
+      .log('cacheUpResults')
+      .then()
+      .block(Duration.ofMinutes(5))
 
     new DefaultCacheResult([
       (APPLICATIONS.ns): applications.values(),
@@ -368,6 +356,90 @@ class ClusterCachingAgent implements CachingAgent, OnDemandAgent, AccountAware {
       (ON_DEMAND.ns): evictableOnDemandCacheDataIdentifiers
     ])
   }
+
+  private static Flux<Map> lookupLoadBalancers(CloudFoundryOperations operations, CloudFoundryAccountCredentials account, ApplicationDetail app) {
+
+    operations.applications()
+      .getEnvironments(GetApplicationEnvironmentsRequest.builder()
+        .name(app.name)
+        .build())
+      .log('gettingEnvironmentsFor ' + app.name)
+      .flatMap({ envs -> Flux.fromArray((envs?.userProvided[CloudFoundryConstants.LOAD_BALANCERS] ?: '').split(',')) })
+      .log('flatMapping for ' + app.name)
+      .map({ route -> [
+          name   : route,
+          region : account.org,
+          account: account]
+      })
+  }
+
+  private static Flux<ServiceInstanceEntity> lookupRelatedServices(CloudFoundryClient client, app) {
+
+    PaginationUtils.requestClientV2Resources({ page ->
+      client.serviceBindingsV2()
+        .list(ListServiceBindingsRequest.builder()
+          .applicationId(app.id)
+          .page(page)
+          .build())
+    })
+    .map({ it.entity.serviceInstanceId })
+    .flatMap({ serviceInstanceId ->
+      client.serviceInstances()
+        .get(GetServiceInstanceRequest.builder()
+          .serviceInstanceId(serviceInstanceId)
+          .build())
+    })
+    .map({ ResourceUtils.&getEntity })
+  }
+
+  private Mono cacheUpResults(ApplicationDetail app,
+                                     Map<String, CacheData> applications,
+                                     Map<String, CacheData> clusters,
+                                     Map<String, CacheData> instances,
+                                     Map<String, CacheData> loadBalancers,
+                                     Map<String, CacheData> serverGroups,
+                                     OrganizationDetail currentOrg,
+                                     SpaceDetail currentSpace,
+                                     CloudFoundryAccountCredentials account,
+                                     ObjectMapper objectMapper,
+                                     long start,
+                                     CloudFoundryOperations operations,
+                                      CloudFoundryClient client,
+                                     Map<String, CacheData> onDemandKeep,
+                                     ApplicationEnvironments environments) {
+    def onDemandData = onDemandKeep ?
+        onDemandKeep[Keys.getServerGroupKey(app.name, account.name, account.org)] : null
+
+    if (onDemandData && new Long(onDemandData.attributes.cacheTime) >= start) {
+      log.info("Using onDemand cache value (${onDemandData.id})")
+      Map<String, List<CacheData>> cacheResults = objectMapper.readValue(onDemandData.attributes.cacheResults as String, new TypeReference<Map<String, List<MutableCacheData>>>() {
+      })
+      cache(cacheResults, APPLICATIONS.ns, applications)
+      cache(cacheResults, CLUSTERS.ns, clusters)
+      cache(cacheResults, SERVER_GROUPS.ns, serverGroups)
+      cache(cacheResults, INSTANCES.ns, instances)
+      cache(cacheResults, LOAD_BALANCERS.ns, loadBalancers)
+      return Mono.just(cacheResults)
+    } else {
+      Flux<Map> declaredLoadBalancers = lookupLoadBalancers(operations, account, app)
+      Flux<ServiceInstanceEntity> relatedServices = lookupRelatedServices(client, app)
+
+      return declaredLoadBalancers.collectList()
+        .and(relatedServices.collectList())
+        .log('lbsAndServices')
+        .then(function({ List<Map> lbs, List<ServiceInstance> svcs ->
+          CloudFoundryData data = new CloudFoundryData(app, account, lbs as Set, currentOrg, currentSpace)
+
+          cacheApplications(data, applications)
+          cacheCluster(data, clusters)
+          cacheInstances(data, instances)
+          cacheLoadBalancers(data, loadBalancers)
+          cacheServerGroup(data, serverGroups, svcs, environments)
+          Mono.just(data)
+      } as Function2))
+    }
+  }
+
 
   private Map<String, CacheData> cache() {
     [:].withDefault { String id -> new MutableCacheData(id) }
@@ -408,23 +480,27 @@ class ClusterCachingAgent implements CachingAgent, OnDemandAgent, AccountAware {
     }
   }
 
-  private void cacheServerGroup(CloudFoundryData data, Map<String, CacheData> serverGroups, CloudSpace currentSpace, Map<String, Set<CloudService>> services) {
+  private void cacheServerGroup(CloudFoundryData data, Map<String, CacheData> serverGroups,
+                                List<ServiceInstance> services, ApplicationEnvironments environments) {
     serverGroups[data.serverGroupKey].with {
       attributes.name = data.application.name
-      attributes.logsLink = "${account.console}/organizations/${data.application.space.organization.meta.guid}/spaces/${data.application.space.meta.guid}/applications/${data.application.meta.guid}/tailing_logs".toString()
-      attributes.consoleLink = "${account.console}/organizations/${data.application.space.organization.meta.guid}/spaces/${data.application.space.meta.guid}/applications/${data.application.meta.guid}".toString()
+      attributes.logsLink = "${account.console}/organizations/${data.org.id}/spaces/${data.space.id}/applications/${data.application.id}/logs".toString()
+      attributes.consoleLink = "${account.console}/organizations/${data.org.id}/spaces/${data.space.id}/applications/${data.application.id}".toString()
       attributes.nativeApplication = data.application
-      attributes.services = services[currentSpace.meta.guid].findAll { data.application.services.contains(it.name) }.collect {
+      attributes.services = services.collect {
         new CloudFoundryService([
             type: 'cf',
-            id: it.meta.guid,
+            id: it.id,
             name: it.name,
             application: data.name.app,
             accountName: account.name,
-            region: currentSpace.organization.name,
+            region: data.org.name,
             nativeService: it
         ])
       }
+      attributes.environments = environments
+      attributes.org = data.org
+      attributes.space = data.space
 
       relationships[APPLICATIONS.ns].add(data.appNameKey)
       relationships[CLUSTERS.ns].add(data.clusterKey)
@@ -434,9 +510,9 @@ class ClusterCachingAgent implements CachingAgent, OnDemandAgent, AccountAware {
   }
 
   private void cacheInstances(CloudFoundryData data, Map<String, CacheData> instances) {
-    data.instances.each { instance ->
-      def id = getInstanceId(data.application, instance)
-      def instanceIdKey = Keys.getInstanceKey(id, account.name, data.application.space.organization.name)
+    data.instances.eachWithIndex { instance, index ->
+      def id = "${data.application.name}(${index})".toString()
+      def instanceIdKey = Keys.getInstanceKey(id, account.name, account.org)
       instances[instanceIdKey].with {
         attributes.name = id
         attributes.nativeInstance = instance
@@ -448,9 +524,10 @@ class ClusterCachingAgent implements CachingAgent, OnDemandAgent, AccountAware {
 
   private void cacheLoadBalancers(CloudFoundryData data, Map<String, CacheData> loadBalancers) {
     data.loadBalancers.each { loadBalancer ->
-      loadBalancers[Keys.getLoadBalancerKey(loadBalancer.name, loadBalancer.account, loadBalancer.region)].with {
+      loadBalancers[Keys.getLoadBalancerKey(loadBalancer.name, loadBalancer.account.name, loadBalancer.region)].with {
         attributes.name = loadBalancer.name
-        attributes.nativeRoute = loadBalancer.nativeRoute
+        attributes.region = loadBalancer.region
+//        attributes.nativeRoute = loadBalancer.nativeRoute
 
         relationships[APPLICATIONS.ns].add(data.appNameKey)
         relationships[SERVER_GROUPS.ns].add(data.serverGroupKey)
@@ -459,14 +536,10 @@ class ClusterCachingAgent implements CachingAgent, OnDemandAgent, AccountAware {
     }
   }
 
-  private static String getInstanceId(CloudApplication application, InstanceInfo instance) {
-    application.name + '(' + instance.index + ')'
-  }
-
   private static class CloudFoundryData {
-    final CloudApplication application
+    final ApplicationDetail application
     final Names name
-    final List<InstanceInfo> instances
+    final List<InstanceDetail> instances
     final Set<Map> loadBalancers
 
     final String appNameKey
@@ -474,38 +547,34 @@ class ClusterCachingAgent implements CachingAgent, OnDemandAgent, AccountAware {
     final String serverGroupKey
     final Set<String> instanceIdKeys
     final Set<String> loadBalancerKeys
+    final OrganizationDetail org
+    final SpaceDetail space
 
-    public CloudFoundryData(CloudApplication application,
-                            String account,
-                            List<InstanceInfo> instances,
-                            Set<CloudRoute> routes) {
+    public CloudFoundryData(ApplicationDetail application,
+                            CloudFoundryAccountCredentials account,
+                            Set<Map> loadBalancers,
+                            OrganizationDetail currentOrg,
+                            SpaceDetail currentSpace) {
       this.application = application
       this.name = Names.parseName(application.name)
-      this.instances = instances
-      this.loadBalancers = (application.envAsMap[CloudFoundryConstants.LOAD_BALANCERS] ?: '').split(',').collect { route ->
-        [
-            name       : route,
-            region     : application.space.organization.name,
-            account    : account,
-            nativeRoute: routes.find { it.host == route }
-        ]
-      }
-
+      this.instances = application.instanceDetails
+      this.loadBalancers = loadBalancers
       this.appNameKey = Keys.getApplicationKey(name.app)
-      this.clusterKey = Keys.getClusterKey(name.cluster, name.app, account)
-      this.serverGroupKey = Keys.getServerGroupKey(application.name, account, application.space.organization.name)
-      this.instanceIdKeys = (this.instances == null) ? Collections.emptyList() : this.instances.collect { InstanceInfo it ->
-        Keys.getInstanceKey(getInstanceId(application, it), account, application.space.organization.name)
-      }
-      this.loadBalancerKeys = this.loadBalancers.collect {
-        Keys.getLoadBalancerKey(it.name, it.account, it.region)
-      }
-    }
-  }
+      this.clusterKey = Keys.getClusterKey(name.cluster, name.app, account.name)
+      this.serverGroupKey = Keys.getServerGroupKey(application.name, account.name, account.org)
+      this.org = currentOrg
+      this.space = currentSpace
 
-  private static class AppAndInstances {
-    CloudApplication app
-    InstancesInfo instancesInfo
+      def index = -1
+      this.instanceIdKeys = this.instances?.collect { InstanceDetail it ->
+        index++
+        Keys.getInstanceKey("${application.name}(${index})".toString(), account.name, account.org)
+      } ?: []
+
+      this.loadBalancerKeys = this.loadBalancers?.collect {
+        Keys.getLoadBalancerKey(it.name, it.account.name, it.region)
+      } ?: []
+    }
   }
 
 }

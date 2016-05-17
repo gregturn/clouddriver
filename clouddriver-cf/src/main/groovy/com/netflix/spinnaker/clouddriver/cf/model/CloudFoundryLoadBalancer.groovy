@@ -20,7 +20,7 @@ import com.netflix.spinnaker.clouddriver.model.LoadBalancer
 import com.netflix.spinnaker.clouddriver.model.LoadBalancerServerGroup
 import groovy.transform.CompileStatic
 import groovy.transform.EqualsAndHashCode
-import org.cloudfoundry.client.lib.domain.CloudRoute
+import org.cloudfoundry.operations.routes.Route
 
 @CompileStatic
 @EqualsAndHashCode(includes = ["name"])
@@ -31,6 +31,6 @@ class CloudFoundryLoadBalancer implements LoadBalancer {
   Set<LoadBalancerServerGroup> serverGroups = new HashSet<>()
   String region
   String account
-  CloudRoute nativeRoute
+  Route nativeRoute
 
 }

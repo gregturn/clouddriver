@@ -14,27 +14,28 @@
  * limitations under the License.
  */
 
-package com.netflix.spinnaker.clouddriver.cf.utils
-import com.netflix.spinnaker.clouddriver.cf.security.CloudFoundryAccountCredentials
+package com.netflix.spinnaker.clouddriver.cf.deploy.handlers
+import com.netflix.spinnaker.clouddriver.cf.TestCredential
+import com.netflix.spinnaker.clouddriver.cf.deploy.description.CloudFoundryDeployDescription
 import spock.lang.Specification
+import spock.lang.Subject
+/**
+ * @author Greg Turnquist
+ */
+class CloudFoundryDeployHandler2Spec extends Specification {
 
-class DefaultCloudFoundryClientFactorySpec extends Specification {
+	@Subject
+	CloudFoundryDeployHandler2 handler
 
-  void "fails to connect to PWS with fake credentials"() {
-    given:
-    def credentials = new CloudFoundryAccountCredentials(
-        username: 'my-username',
-        password: 'my-password',
-        api: 'https://api.run.pivotal.io',
-        name: 'pws'
-    )
-    def factory = new DefaultCloudFoundryClientFactory()
+	void "only handles CF deployment description type"() {
+		given:
+		handler = new CloudFoundryDeployHandler2();
+		def description = new CloudFoundryDeployDescription(credentials: TestCredential.named('test'))
 
-    when:
-    def client = factory.createCloudFoundryClient(credentials, true)
+		expect:
+		handler.handles description
+	}
 
-    then:
-    client == null
-  }
+
 
 }
