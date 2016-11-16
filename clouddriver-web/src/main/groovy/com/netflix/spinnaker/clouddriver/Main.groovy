@@ -32,11 +32,14 @@ import com.netflix.spinnaker.clouddriver.openstack.OpenstackConfiguration
 import com.netflix.spinnaker.clouddriver.security.config.SecurityConfig
 import com.netflix.spinnaker.clouddriver.titus.TitusConfiguration
 import com.netflix.spinnaker.config.ErrorConfiguration
+import org.springframework.boot.actuate.autoconfigure.EndpointMBeanExportAutoConfiguration
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration
 import org.springframework.boot.autoconfigure.batch.BatchAutoConfiguration
 import org.springframework.boot.autoconfigure.groovy.template.GroovyTemplateAutoConfiguration
 import org.springframework.boot.builder.SpringApplicationBuilder
 import org.springframework.boot.context.web.SpringBootServletInitializer
+import org.springframework.cloud.deployer.spi.cloudfoundry.CloudFoundryDeployerAutoConfiguration
+import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.ComponentScan
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Import
@@ -71,6 +74,8 @@ import java.security.Security
 @EnableAutoConfiguration(exclude = [
     BatchAutoConfiguration,
     GroovyTemplateAutoConfiguration,
+    EndpointMBeanExportAutoConfiguration,
+    CloudFoundryDeployerAutoConfiguration
 ])
 @EnableScheduling
 class Main extends SpringBootServletInitializer {

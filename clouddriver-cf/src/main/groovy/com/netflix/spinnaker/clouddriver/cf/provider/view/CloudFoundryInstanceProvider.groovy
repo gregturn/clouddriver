@@ -15,6 +15,7 @@
  */
 
 package com.netflix.spinnaker.clouddriver.cf.provider.view
+
 import com.netflix.spinnaker.cats.cache.Cache
 import com.netflix.spinnaker.cats.cache.CacheData
 import com.netflix.spinnaker.clouddriver.cf.cache.CacheUtils
@@ -29,6 +30,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Component
 
 import static com.netflix.spinnaker.clouddriver.cf.cache.Keys.Namespace.INSTANCES
+import static com.netflix.spinnaker.clouddriver.cf.cache.Keys.Namespace.LOAD_BALANCERS
 import static com.netflix.spinnaker.clouddriver.cf.cache.Keys.Namespace.SERVER_GROUPS
 
 @Component
@@ -55,7 +57,9 @@ class CloudFoundryInstanceProvider implements InstanceProvider<CloudFoundryAppli
     }
 
     CacheData serverGroup = ProviderUtils.resolveRelationshipData(cacheView, instanceEntry, SERVER_GROUPS.ns)[0]
-    CacheUtils.translateInstance(instanceEntry, serverGroup)
+    Collection<CacheData> allLoadBalancers = ProviderUtils.resolveRelationshipDataForCollection(cacheView, [instanceEntry], LOAD_BALANCERS.ns)
+    def loadBalancers = CacheUtils.translateLoadBalancers(allLoadBalancers).values()
+    CacheUtils.translateInstance(instanceEntry, serverGroup, loadBalancers)
   }
 
   @Override

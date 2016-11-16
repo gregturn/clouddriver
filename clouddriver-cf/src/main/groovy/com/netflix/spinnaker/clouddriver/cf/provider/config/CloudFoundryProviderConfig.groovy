@@ -15,13 +15,14 @@
  */
 
 package com.netflix.spinnaker.clouddriver.cf.provider.config
+
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.netflix.spectator.api.Registry
 import com.netflix.spinnaker.cats.agent.Agent
 import com.netflix.spinnaker.cats.agent.CachingAgent
 import com.netflix.spinnaker.cats.provider.ProviderSynchronizerTypeWrapper
 import com.netflix.spinnaker.clouddriver.cf.provider.CloudFoundryProvider
-import com.netflix.spinnaker.clouddriver.cf.provider.agent.ClusterCachingAgent
+import com.netflix.spinnaker.clouddriver.cf.provider.agent.ReactiveCachingAgent
 import com.netflix.spinnaker.clouddriver.cf.security.CloudFoundryAccountCredentials
 import com.netflix.spinnaker.clouddriver.cf.utils.CloudFoundryClientFactory
 import com.netflix.spinnaker.clouddriver.security.AccountCredentialsRepository
@@ -88,7 +89,8 @@ class CloudFoundryProviderConfig {
 
     allAccounts.each { CloudFoundryAccountCredentials credentials ->
       if (!scheduledAccounts.contains(credentials.name)) {
-        newlyAddedAgents << new ClusterCachingAgent(cloudFoundryClientFactory, credentials, objectMapper, registry)
+        //newlyAddedAgents << new ClusterCachingAgent(cloudFoundryClientFactory, credentials, objectMapper, registry)
+        newlyAddedAgents << new ReactiveCachingAgent(cloudFoundryClientFactory, credentials, objectMapper, registry)
       }
     }
 

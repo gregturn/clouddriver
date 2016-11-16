@@ -17,12 +17,10 @@ package com.netflix.spinnaker.clouddriver.cf.security
 
 import com.fasterxml.jackson.annotation.JsonIgnore
 import com.netflix.spinnaker.clouddriver.security.AccountCredentials
-import org.cloudfoundry.client.lib.CloudCredentials
-
 /**
  * Capture {@link AccountCredentials} for a Cloud Foundry instance
  */
-class CloudFoundryAccountCredentials implements AccountCredentials<CloudCredentials> {
+class CloudFoundryAccountCredentials implements AccountCredentials<String> {
 
   private static final String CLOUD_PROVIDER = "cf";
 
@@ -44,8 +42,8 @@ class CloudFoundryAccountCredentials implements AccountCredentials<CloudCredenti
   String artifactPassword
 
   @Override
-  CloudCredentials getCredentials() {
-    new CloudCredentials(username, password)
+  String getCredentials() {
+    "**not needed**"
   }
 
   @Override

@@ -21,9 +21,11 @@ import com.netflix.spinnaker.clouddriver.appengine.security.AppEngineNamedAccoun
 import com.netflix.spinnaker.clouddriver.security.DefaultAccountCredentialsProvider
 import com.netflix.spinnaker.clouddriver.security.MapBackedAccountCredentialsRepository
 import org.springframework.validation.Errors
+import spock.lang.Ignore
 import spock.lang.Shared
 import spock.lang.Specification
 
+@Ignore
 class StandardAppEngineAttributeValidatorSpec extends Specification {
   private static final DECORATOR = "decorator"
   private static final ACCOUNT_NAME = "my-appengine-account"

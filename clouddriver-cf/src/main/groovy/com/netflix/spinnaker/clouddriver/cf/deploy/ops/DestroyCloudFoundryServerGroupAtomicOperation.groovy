@@ -15,16 +15,15 @@
  */
 
 package com.netflix.spinnaker.clouddriver.cf.deploy.ops
-
-import com.netflix.spinnaker.clouddriver.data.task.Task
-import com.netflix.spinnaker.clouddriver.data.task.TaskRepository
-import com.netflix.spinnaker.clouddriver.helpers.OperationPoller
-import com.netflix.spinnaker.clouddriver.orchestration.AtomicOperation
 import com.netflix.spinnaker.clouddriver.cf.deploy.description.DestroyCloudFoundryServerGroupDescription
 import com.netflix.spinnaker.clouddriver.cf.utils.CloudFoundryClientFactory
-import org.cloudfoundry.client.lib.domain.CloudApplication
+import com.netflix.spinnaker.clouddriver.data.task.TaskRepository
+import com.netflix.spinnaker.clouddriver.orchestration.AtomicOperation
+import org.cloudfoundry.operations.applications.DeleteApplicationRequest
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.beans.factory.annotation.Qualifier
+
+import java.time.Duration
+import java.util.function.Function
 
 class DestroyCloudFoundryServerGroupAtomicOperation implements AtomicOperation<Void> {
 
@@ -34,14 +33,9 @@ class DestroyCloudFoundryServerGroupAtomicOperation implements AtomicOperation<V
   CloudFoundryClientFactory cloudFoundryClientFactory
 
   @Autowired
-  @Qualifier('cloudFoundryOperationPoller')
-  OperationPoller operationPoller
+  TaskRepository taskRepository
 
   DestroyCloudFoundryServerGroupDescription description
-
-  private static Task getTask() {
-    TaskRepository.threadLocalTask.get()
-  }
 
   DestroyCloudFoundryServerGroupAtomicOperation(DestroyCloudFoundryServerGroupDescription description) {
     this.description = description
@@ -49,22 +43,24 @@ class DestroyCloudFoundryServerGroupAtomicOperation implements AtomicOperation<V
 
   @Override
   Void operate(List priorOutputs) {
-    task.updateStatus BASE_PHASE, "Initializing destruction of server group $description.serverGroupName in $description.region..."
 
-    def client = cloudFoundryClientFactory.createCloudFoundryClient(description.credentials, true)
+    def task = taskRepository.create(BASE_PHASE, "Initializing destruction of server group $description.serverGroupName in $description.region...")
+    TaskRepository.threadLocalTask.set(task)
 
-    try {
-      client.deleteApplication(description.serverGroupName)
+    def operations = cloudFoundryClientFactory.createCloudFoundryOperations(description.credentials, true)
 
-      operationPoller.waitForOperation(
-          {client.applications},
-          {List<CloudApplication> apps -> !apps.find {it.name == description.serverGroupName}},
-          null, task, description.serverGroupName, BASE_PHASE)
-
-      task.updateStatus BASE_PHASE, "Done destroying server group $description.serverGroupName in $description.region."
-    } catch (Exception e) {
-      task.updateStatus BASE_PHASE, "Failed to delete server group $description.serverGroupName => $e.message"
-    }
+    operations.applications()
+      .delete(DeleteApplicationRequest.builder()
+        .name(description.serverGroupName)
+        .deleteRoutes(true)
+        .build())
+      .then({
+        task.updateStatus BASE_PHASE, "Done destroying server group $description.serverGroupName in $description.region."
+      } as Function)
+      .otherwise({e ->
+        task.updateStatus BASE_PHASE, "Failed to delete server group $description.serverGroupName => $e.message"
+      })
+      .block(Duration.ofMinutes(5))
 
     null
   }

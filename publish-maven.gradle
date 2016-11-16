@@ -1,0 +1,83 @@
+apply plugin: 'maven'
+
+/**
+ * Install locally by running ./gradlew install
+ */
+install {
+	repositories.mavenInstaller {
+		customizePom(pom, project)
+	}
+}
+
+/**
+ * Upload to artifactory by running ./gradlew -Pusername=foo -Ppassword=bar uploadArchives
+ */
+uploadArchives {
+	repositories {
+		mavenDeployer {
+			repository(url: "https://repo.spring.io/libs-snapshot-local") {
+				if (project.hasProperty('username')) {
+					authentication(userName: "${username}", password: "${password}")
+				}
+			}
+			customizePom(pom, project)
+		}
+	}
+}
+
+def customizePom(pom, gradleProject) {
+	pom.whenConfigured { generatedPom ->
+		// eliminate test-scoped dependencies (no need in maven central poms)
+		generatedPom.dependencies.removeAll { dep ->
+			dep.scope == 'test'
+		}
+
+		// Ensure consistent ordering of dependencies to ease comparison with older poms
+		generatedPom.dependencies = generatedPom.dependencies.sort { dep ->
+			"$dep.scope:$dep.groupId:$dep.artifactId"
+		}
+
+		generatedPom.dependencies = generatedPom.dependencies.collect { dep ->
+			if (dep.groupId == 'com.netflix.spinnaker.clouddriver') {
+				dep.groupId = 'org.springframework.spinnaker.clouddriver'
+			}
+			return dep
+		}
+
+		// add all items necessary for maven central publication
+		generatedPom.artifactId = gradleProject.name
+		generatedPom.groupId = 'org.springframework.spinnaker.clouddriver'
+		generatedPom.version = '1.439.0-0.3.0.BUILD-SNAPSHOT'
+		generatedPom.project {
+			name = gradleProject.description
+			description = "Fork of ${gradleProject.description} to support Cloud Foundry"
+			url = 'http://spinnaker.io'
+			organization {
+				name = 'Spring team at Pivotal'
+				url = 'https://spring.io'
+			}
+			licenses {
+				license {
+					name 'The Apache Software License, Version 2.0'
+					url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+					distribution 'repo'
+				}
+			}
+
+			scm {
+				url = 'https://github.com/gregturn/clouddriver'
+				connection = 'scm:git:https://github.com/gregturn/clouddriver.git'
+				developerConnection = 'scm:git:https://github.com/gregturn/clouddriver.git'
+			}
+
+			developers {
+				developer {
+					id = 'gregturn'
+					name = 'Greg Turnquist'
+					email = 'gturnquist@pivotal.io'
+					roles = ['Developer']
+				}
+			}
+		}
+	}
+}

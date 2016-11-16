@@ -32,6 +32,7 @@ allprojects {
   group = "com.netflix.spinnaker.clouddriver"
   apply plugin: 'spinnaker.project'
   apply plugin: 'groovy'
+  apply from: "${rootProject.projectDir}/publish-maven.gradle"
 
   ext {
     spinnakerDependenciesVersion = project.hasProperty('spinnakerDependenciesVersion') ? project.property('spinnakerDependenciesVersion') : '0.65.0'
@@ -105,6 +106,16 @@ subprojects { project ->
           }
           if (it.requested.group == 'org.apache.xbean') {
             it.useVersion '4.3'
+          }
+
+          if (it.requested.group == 'io.projectreactor' && it.requested.name == 'reactor-core') {
+            it.useVersion '3.0.3.RELEASE'
+          }
+          if (it.requested.group == 'org.cloudfoundry') {
+            it.useVersion '2.0.4.RELEASE'
+          }
+          if (it.requested.group == 'org.springframework') {
+            it.useVersion '4.3.3.RELEASE'
           }
         }
       }

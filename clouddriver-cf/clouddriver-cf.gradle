@@ -1,11 +1,24 @@
 dependencies {
-  def cloudFoundryClientVersion = '1.1.3'
+  def springCloudDeployerCloudFoundry = '1.0.1.RELEASE'
   def jets3tVersion = '0.9.4'
 
   compile project(":clouddriver-core")
   compile spinnaker.dependency('frigga')
   compile spinnaker.dependency('bootActuator')
   compile spinnaker.dependency('bootWeb')
-  compile("org.cloudfoundry:cloudfoundry-client-lib:${cloudFoundryClientVersion}")
+
+  compile("org.springframework.cloud:spring-cloud-deployer-cloudfoundry:${springCloudDeployerCloudFoundry}") {
+    exclude group: 'org.springframework.boot'
+    exclude group: 'org.springframework'
+  }
+  compile("org.springframework.cloud:spring-cloud-deployer-resource-maven:${springCloudDeployerCloudFoundry}") {
+    exclude group: 'org.springframework'
+  }
+
   compile("net.java.dev.jets3t:jets3t:${jets3tVersion}")
+}
+
+repositories {
+  mavenCentral()
+  maven { url 'https://repo.spring.io/release' }
 }

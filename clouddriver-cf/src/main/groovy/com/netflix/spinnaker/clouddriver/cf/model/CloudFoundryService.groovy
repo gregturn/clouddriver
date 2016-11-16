@@ -15,10 +15,8 @@
  */
 
 package com.netflix.spinnaker.clouddriver.cf.model
-
 import groovy.transform.EqualsAndHashCode
-import org.cloudfoundry.client.lib.domain.CloudService
-
+import org.cloudfoundry.operations.services.ServiceInstance
 /**
  * Representation for a Cloud Foundry service.
  *
@@ -34,6 +32,6 @@ class CloudFoundryService {
   String accountName
   String region
 
-  CloudService nativeService
+  ServiceInstance nativeService
 
 }

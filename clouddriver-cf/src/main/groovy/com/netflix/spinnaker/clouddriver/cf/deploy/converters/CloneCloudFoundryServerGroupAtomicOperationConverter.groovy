@@ -18,7 +18,7 @@ package com.netflix.spinnaker.clouddriver.cf.deploy.converters
 
 import com.netflix.spinnaker.clouddriver.cf.CloudFoundryOperation
 import com.netflix.spinnaker.clouddriver.cf.deploy.description.CloudFoundryDeployDescription
-import com.netflix.spinnaker.clouddriver.cf.deploy.handlers.CloudFoundryDeployHandler
+import com.netflix.spinnaker.clouddriver.cf.deploy.handlers.CloudFoundryDeployHandler2
 import com.netflix.spinnaker.clouddriver.cf.deploy.ops.CloneCloudFoundryServerGroupAtomicOperation
 import com.netflix.spinnaker.clouddriver.cf.security.CloudFoundryAccountCredentials
 import com.netflix.spinnaker.clouddriver.orchestration.AtomicOperation
@@ -27,6 +27,7 @@ import com.netflix.spinnaker.clouddriver.security.AbstractAtomicOperationsCreden
 import com.netflix.spinnaker.clouddriver.security.AccountCredentialsRepository
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Component
+
 @CloudFoundryOperation(AtomicOperations.CLONE_SERVER_GROUP)
 @Component("cloneCloudFoundryDescription")
 class CloneCloudFoundryServerGroupAtomicOperationConverter extends AbstractAtomicOperationsCredentialsSupport {
@@ -35,7 +36,7 @@ class CloneCloudFoundryServerGroupAtomicOperationConverter extends AbstractAtomi
 	private AccountCredentialsRepository repository
 
 	@Autowired
-	private CloudFoundryDeployHandler deployHandler
+	private CloudFoundryDeployHandler2 deployHandler
 
 	@Override
 	AtomicOperation convertOperation(Map input) {

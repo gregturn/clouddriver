@@ -16,18 +16,119 @@
 
 package com.netflix.spinnaker.clouddriver.cf.deploy.ops
 
+import com.netflix.frigga.Names
+import com.netflix.spinnaker.clouddriver.cf.config.CloudFoundryConstants
 import com.netflix.spinnaker.clouddriver.cf.deploy.description.EnableDisableCloudFoundryServerGroupDescription
+import com.netflix.spinnaker.clouddriver.cf.provider.view.CloudFoundryClusterProvider
+import com.netflix.spinnaker.clouddriver.cf.utils.CloudFoundryClientFactory
+import com.netflix.spinnaker.clouddriver.data.task.TaskRepository
+import com.netflix.spinnaker.clouddriver.helpers.OperationPoller
+import com.netflix.spinnaker.clouddriver.orchestration.AtomicOperation
+import org.cloudfoundry.operations.applications.ApplicationEnvironments
+import org.cloudfoundry.operations.applications.GetApplicationEnvironmentsRequest
+import org.cloudfoundry.operations.applications.StopApplicationRequest
+import org.cloudfoundry.operations.organizations.OrganizationDetail
+import org.cloudfoundry.operations.organizations.OrganizationInfoRequest
+import org.cloudfoundry.operations.routes.UnmapRouteRequest
+import org.cloudfoundry.util.tuple.Function2
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.beans.factory.annotation.Qualifier
+import reactor.core.publisher.Flux
+import reactor.core.publisher.Mono
+import reactor.util.function.Tuples
 
-class DisableCloudFoundryServerGroupAtomicOperation extends AbstractEnableDisableAtomicOperation {
+import java.time.Duration
+import java.util.function.Function
+
+import static org.cloudfoundry.util.tuple.TupleUtils.function
+
+class DisableCloudFoundryServerGroupAtomicOperation implements AtomicOperation<Void> {
 
   final String phaseName = "DISABLE_SERVER_GROUP"
 
+  EnableDisableCloudFoundryServerGroupDescription description
+
+  @Autowired
+  CloudFoundryClientFactory cloudFoundryClientFactory
+
+  @Autowired
+  CloudFoundryClusterProvider clusterProvider
+
+  @Autowired
+  TaskRepository taskRepository
+
+  @Autowired
+  @Qualifier('cloudFoundryOperationPoller')
+  OperationPoller operationPoller
+
   DisableCloudFoundryServerGroupAtomicOperation(EnableDisableCloudFoundryServerGroupDescription description) {
-    super(description)
+    this.description = description
   }
 
   @Override
-  boolean isDisable() {
-    true
+  Void operate(List priorOutputs) {
+
+    def task = taskRepository.create(phaseName, "Initializing disable server group operation for $description.serverGroupName in ${description.region}...")
+    TaskRepository.threadLocalTask.set(task)
+
+    Names names = Names.parseName(description.serverGroupName)
+    if (description.nativeLoadBalancers == null) {
+      description.nativeLoadBalancers = clusterProvider.getCluster(names.app, description.accountName, names.cluster)?.
+          serverGroups.find {it.name == description.serverGroupName}?.nativeLoadBalancers
+    }
+
+    def operations = cloudFoundryClientFactory.createCloudFoundryOperations(description.credentials, true)
+
+    operations.organizations()
+      .get(OrganizationInfoRequest.builder()
+        .name(description.region)
+        .build())
+      .then({OrganizationDetail org ->
+        task.updateStatus phaseName, "Looking up env settings for ${description.serverGroupName}"
+
+        operations.applications()
+          .getEnvironments(GetApplicationEnvironmentsRequest.builder()
+            .name(description.serverGroupName)
+            .build())
+          .and(Mono.just(org))
+      } as Function)
+      .flatMap(function({ ApplicationEnvironments env, OrganizationDetail org ->
+        task.updateStatus phaseName, "Looking up load balancers associated with ${description.serverGroupName}"
+
+        def userProvided = env.userProvided ?: [:]
+        def loadBalancerHosts = userProvided[CloudFoundryConstants.LOAD_BALANCERS]?.split(',') as List ?: []
+        if (loadBalancerHosts.empty) {
+          task.updateStatus phaseName, "${description.serverGroupName} is not linked to any load balancers and can NOT be disabled"
+          throw new RuntimeException("${description.serverGroupName} is not linked to any load balancers and can NOT be disabled")
+        }
+        loadBalancerHosts += description.serverGroupName
+
+        Flux.fromIterable(loadBalancerHosts.collect { loadBalancerHost ->
+          Tuples.of(loadBalancerHost, org)
+        })
+      } as Function2))
+      .concatMap(function({ String loadBalancerHost, OrganizationDetail org ->
+        task.updateStatus phaseName, "Deregistering ${description.serverGroupName} instances with load balancer ${loadBalancerHost}..."
+
+        operations.routes()
+          .unmap(UnmapRouteRequest.builder()
+            .applicationName(description.serverGroupName)
+            .host(loadBalancerHost)
+            .domain(org.domains[0])
+            .build())
+      } as Function2))
+      .collectList()
+      .then({
+        operations.applications()
+          .stop(StopApplicationRequest.builder()
+            .name(description.serverGroupName)
+            .build())
+      } as Function)
+      .block(Duration.ofMinutes(5))
+
+    task.updateStatus phaseName, "Done disabling server group $description.serverGroupName in $description.region."
+
+    null
   }
+
 }

@@ -15,9 +15,8 @@
  */
 
 package com.netflix.spinnaker.clouddriver.cf.utils
+
 import com.netflix.spinnaker.clouddriver.cf.security.CloudFoundryAccountCredentials
-import org.cloudfoundry.client.lib.CloudFoundryException
-import org.springframework.http.HttpStatus
 import spock.lang.Ignore
 import spock.lang.Specification
 
@@ -40,8 +39,6 @@ class DefaultCloudFoundryClientFactorySpec extends Specification {
 
     then:
     client == null
-    CloudFoundryException e = thrown()
-    e.statusCode == HttpStatus.FORBIDDEN
   }
 
 }

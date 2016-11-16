@@ -17,15 +17,21 @@
 package com.netflix.spinnaker.clouddriver.cf.utils
 
 import com.netflix.spinnaker.clouddriver.cf.security.CloudFoundryAccountCredentials
-import org.cloudfoundry.client.lib.CloudFoundryOperations
-
+import org.cloudfoundry.client.CloudFoundryClient
+import org.cloudfoundry.operations.CloudFoundryOperations
+import org.springframework.cloud.deployer.spi.cloudfoundry.CloudFoundryAppDeployer
 /**
  * Factory interface for creating Cloud Foundry clients. Makes it possible to delay client
  * creation until ALL details are gathered.
  */
 interface CloudFoundryClientFactory {
 
-  CloudFoundryOperations createCloudFoundryClient(CloudFoundryAccountCredentials credentials,
-                                                  boolean trustSelfSignedCerts)
+  CloudFoundryClient createCloudFoundryClient(CloudFoundryAccountCredentials credentials,
+                                              boolean trustSelfSignedCerts)
+
+  CloudFoundryOperations createCloudFoundryOperations(CloudFoundryAccountCredentials credentials,
+                                                      boolean trustSelfSignedCerts)
+
+  CloudFoundryAppDeployer createCloudFoundryAppDeployer(CloudFoundryAccountCredentials credentials)
 
 }

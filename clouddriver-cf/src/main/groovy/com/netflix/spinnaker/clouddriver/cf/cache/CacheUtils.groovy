@@ -20,19 +20,17 @@ import com.netflix.spinnaker.cats.cache.Cache
 import com.netflix.spinnaker.cats.cache.CacheData
 import com.netflix.spinnaker.cats.cache.RelationshipCacheFilter
 import com.netflix.spinnaker.clouddriver.cf.config.CloudFoundryConstants
-import com.netflix.spinnaker.clouddriver.cf.model.CloudFoundryApplicationInstance
-import com.netflix.spinnaker.clouddriver.cf.model.CloudFoundryCluster
-import com.netflix.spinnaker.clouddriver.cf.model.CloudFoundryLoadBalancer
-import com.netflix.spinnaker.clouddriver.cf.model.CloudFoundryServerGroup
-import com.netflix.spinnaker.clouddriver.cf.model.CloudFoundryService
+import com.netflix.spinnaker.clouddriver.cf.model.*
 import com.netflix.spinnaker.clouddriver.cf.provider.ProviderUtils
+import com.netflix.spinnaker.clouddriver.cf.utils.CloudFoundryJavaClientUtils
 import com.netflix.spinnaker.clouddriver.model.LoadBalancerInstance
 import com.netflix.spinnaker.clouddriver.model.LoadBalancerServerGroup
-import org.cloudfoundry.client.lib.domain.CloudApplication
-import org.cloudfoundry.client.lib.domain.CloudDomain
-import org.cloudfoundry.client.lib.domain.CloudRoute
-import org.cloudfoundry.client.lib.domain.CloudService
-import org.cloudfoundry.client.lib.domain.InstanceInfo
+import org.cloudfoundry.operations.applications.ApplicationDetail
+import org.cloudfoundry.operations.applications.InstanceDetail
+import org.cloudfoundry.operations.organizations.OrganizationDetail
+import org.cloudfoundry.operations.organizations.OrganizationQuota
+import org.cloudfoundry.operations.services.ServiceInstance
+import org.cloudfoundry.operations.spaces.SpaceDetail
 
 import static com.netflix.spinnaker.clouddriver.cf.cache.Keys.Namespace.*
 
@@ -95,11 +93,26 @@ class CacheUtils {
                                                       Collection<CloudFoundryApplicationInstance> instances,
                                                       Collection<CloudFoundryLoadBalancer> loadBalancers) {
 
-    def serverGroup = new CloudFoundryServerGroup(serverGroupEntry.attributes)
+    def serverGroup = new CloudFoundryServerGroup(
+        name: serverGroupEntry.attributes.name,
+        consoleLink: serverGroupEntry.attributes.consoleLink,
+        logsLink: serverGroupEntry.attributes.logsLink,
+        nativeApplication: ApplicationDetail.builder()
+          .stack(serverGroupEntry.attributes.nativeApplication.stack)
+          .urls(serverGroupEntry.attributes.nativeApplication.urls)
+          .requestedState(serverGroupEntry.attributes.nativeApplication.requestedState)
+          .runningInstances(serverGroupEntry.attributes.nativeApplication.runningInstances)
+          .memoryLimit(serverGroupEntry.attributes.nativeApplication.memoryLimit)
+          .lastUploaded(new Date(serverGroupEntry.attributes.nativeApplication.lastUploaded))
+          .diskQuota(serverGroupEntry.attributes.nativeApplication.diskQuota)
+          .buildpack(serverGroupEntry.attributes.nativeApplication.buildpack)
+          .instances(serverGroupEntry.attributes.nativeApplication.instances)
+          .name(serverGroupEntry.attributes.nativeApplication.name)
+          .id(serverGroupEntry.attributes.nativeApplication.id)
+          .build()
+    )
 
-    serverGroup.nativeApplication = (serverGroupEntry.attributes.nativeApplication instanceof CloudApplication) ? serverGroupEntry.attributes.nativeApplication : ProviderUtils.buildNativeApplication(serverGroupEntry.attributes.nativeApplication)
-
-    serverGroup.memory = serverGroup.nativeApplication.memory
+    serverGroup.memory = serverGroup.nativeApplication.memoryLimit
     serverGroup.disk = serverGroup.nativeApplication.diskQuota
 
     serverGroup.services = serverGroupEntry.attributes.services.collect {
@@ -110,34 +123,77 @@ class CacheUtils {
           application: it.application,
           accountName: it.accountName,
           region: it.region,
-          nativeService: (it.nativeService instanceof CloudService) ? it.nativeService : ProviderUtils.buildNativeService(it.nativeService)
+          nativeService: ServiceInstance.builder()
+              .id(it.nativeService.id)
+              .name(it.nativeService.name)
+              .type(CloudFoundryJavaClientUtils.serviceInstanceTypeFrom(it.nativeService.type))
+              .dashboardUrl(it.nativeService.dashboardUrl)
+              .description(it.nativeService.description)
+              .documentationUrl(it.nativeService.documentationUrl)
+              .plan(it.nativeService.plan)
+              .service(it.nativeService.service)
+              .status(it.nativeService.status)
+              .message(it.nativeService.message)
+              .build()
       ])
     }
 
     serverGroup.buildInfo = [
-        commit: serverGroup.nativeApplication.envAsMap[CloudFoundryConstants.COMMIT_HASH],
-        branch: serverGroup.nativeApplication.envAsMap[CloudFoundryConstants.COMMIT_BRANCH],
-        package_name: serverGroup.nativeApplication.envAsMap[CloudFoundryConstants.PACKAGE],
+        commit: serverGroupEntry.attributes.environments[CloudFoundryConstants.COMMIT_HASH] ?: '',
+        branch: serverGroupEntry.attributes.environments[CloudFoundryConstants.COMMIT_BRANCH] ?: '',
+        package_name: serverGroupEntry.attributes.environments[CloudFoundryConstants.PACKAGE] ?: '',
         jenkins: [
-            fullUrl: serverGroup.nativeApplication.envAsMap[CloudFoundryConstants.JENKINS_HOST],
-            name: serverGroup.nativeApplication.envAsMap[CloudFoundryConstants.JENKINS_NAME],
-            number: serverGroup.nativeApplication.envAsMap[CloudFoundryConstants.JENKINS_BUILD]
+            fullUrl: serverGroupEntry.attributes.environments[CloudFoundryConstants.JENKINS_HOST] ?: '',
+            name: serverGroupEntry.attributes.environments[CloudFoundryConstants.JENKINS_NAME] ?: '',
+            number: serverGroupEntry.attributes.environments[CloudFoundryConstants.JENKINS_BUILD] ?: ''
         ]
     ]
 
     serverGroup.instances = (instances) ? instances.findAll { it.name.contains(serverGroup.name) } : [] as Set
-    serverGroup.nativeLoadBalancers = serverGroup.nativeApplication.envAsMap[CloudFoundryConstants.LOAD_BALANCERS]?.split(',').collect { route ->
+
+    serverGroup.environments = serverGroupEntry.attributes.environments
+
+    def quota = OrganizationQuota.builder()
+        .id(serverGroupEntry.attributes.org.quota.id)
+        .name(serverGroupEntry.attributes.org.quota.name)
+        .organizationId(serverGroupEntry.attributes.org.quota.organizationId)
+        .paidServicePlans(serverGroupEntry.attributes.org.quota.paidServicePlans)
+        .instanceMemoryLimit(serverGroupEntry.attributes.org.quota.instanceMemoryLimit)
+        .totalMemoryLimit(serverGroupEntry.attributes.org.quota.totalMemoryLimit)
+        .totalRoutes(serverGroupEntry.attributes.org.quota.totalRoutes)
+        .totalServiceInstances(serverGroupEntry.attributes.org.quota.totalServiceInstances)
+        .build()
+
+    serverGroup.org = OrganizationDetail.builder()
+      .spaces(serverGroupEntry.attributes.org.spaces)
+      .name(serverGroupEntry.attributes.org.name)
+      .domains(serverGroupEntry.attributes.org.domains)
+      .id(serverGroupEntry.attributes.org.id)
+      .quota(quota)
+      .build()
+
+    serverGroup.space = SpaceDetail.builder()
+      .services(serverGroupEntry.attributes.space.services)
+      .organization(serverGroupEntry.attributes.space.organization)
+      .domains(serverGroupEntry.attributes.space.domains)
+      .applications(serverGroupEntry.attributes.space.applications)
+      .name(serverGroupEntry.attributes.space.name)
+      .id(serverGroupEntry.attributes.space.id)
+      .build()
+
+    def namedLoadBalancers = serverGroup.environments[CloudFoundryConstants.LOAD_BALANCERS]?.split(',') as List
+    serverGroup.nativeLoadBalancers = namedLoadBalancers.findResults { route ->
       loadBalancers.find { it.name == route }
     }
 
-    serverGroup.disabled = !serverGroup.nativeApplication.uris?.findResults { uri ->
+    serverGroup.disabled = !serverGroup.nativeApplication.urls?.findResults { url ->
       def lbs = serverGroup.nativeLoadBalancers.collect { loadBalancer ->
-        (loadBalancer?.nativeRoute?.name) ? loadBalancer.nativeRoute.name : ''
+        (loadBalancer?.name) ? loadBalancer.name : ''
       }
-      lbs.contains(uri)
+      lbs.contains(url.split('\\.')[0]) // Just compare the hostname
     }
 
-    serverGroup.nativeLoadBalancers.each {
+    serverGroup.nativeLoadBalancers?.each {
       it.serverGroups.add(new LoadBalancerServerGroup(
           name      :        serverGroup.name,
           isDisabled:        serverGroup.isDisabled(),
@@ -158,20 +214,35 @@ class CacheUtils {
   static Map<String, CloudFoundryApplicationInstance> translateInstances(Cache cacheView, Collection<CacheData> instanceData) {
     instanceData?.collectEntries { instanceEntry ->
       CacheData serverGroup = ProviderUtils.resolveRelationshipData(cacheView, instanceEntry, SERVER_GROUPS.ns)[0]
-      [(instanceEntry.id): translateInstance(instanceEntry, serverGroup)]
+      Collection<CacheData> allLoadBalancers = ProviderUtils.resolveRelationshipDataForCollection(cacheView, [instanceEntry], LOAD_BALANCERS.ns)
+      def loadBalancers = CacheUtils.translateLoadBalancers(allLoadBalancers).values()
+
+      [(instanceEntry.id): translateInstance(instanceEntry, serverGroup, loadBalancers)]
     } ?: [:]
   }
 
-  static CloudFoundryApplicationInstance translateInstance(CacheData instanceEntry, CacheData serverGroup) {
+  static CloudFoundryApplicationInstance translateInstance(CacheData instanceEntry, CacheData serverGroup,
+                                                           Collection<CloudFoundryLoadBalancer> lbs) {
     def instance = new CloudFoundryApplicationInstance(
-        name: instanceEntry.attributes.name.toString(),
-        nativeInstance: (instanceEntry.attributes.nativeInstance instanceof InstanceInfo) ? instanceEntry.attributes.nativeInstance : new InstanceInfo(instanceEntry.attributes.nativeInstance as Map<String, Object>),
-        nativeApplication: (serverGroup.attributes.nativeApplication instanceof CloudApplication) ? serverGroup.attributes.nativeApplication : ProviderUtils.buildNativeApplication(serverGroup.attributes.nativeApplication as Map)
+        name: instanceEntry.attributes.name,
+        nativeInstance: (instanceEntry.attributes.nativeInstance instanceof InstanceDetail)
+            ? instanceEntry.attributes.nativeInstance
+            : InstanceDetail.builder()
+                .cpu(instanceEntry.attributes.nativeInstance.cpu)
+                .diskQuota(instanceEntry.attributes.nativeInstance.diskQuota)
+                .diskUsage(instanceEntry.attributes.nativeInstance.diskUsage)
+                .memoryQuota(instanceEntry.attributes.nativeInstance.memoryQuota)
+                .memoryUsage(instanceEntry.attributes.nativeInstance.memoryUsage)
+                .since(new Date(instanceEntry.attributes.nativeInstance.since))
+                .state(instanceEntry.attributes.nativeInstance.state)
+              .build(),
+        space: serverGroup.attributes.space.name
     )
     instance.consoleLink = serverGroup.attributes.consoleLink
     instance.logsLink = serverGroup.attributes.logsLink
     instance.healthState = CloudFoundryApplicationInstance.instanceStateToHealthState(instance.nativeInstance.state)
     instance.health = CloudFoundryApplicationInstance.createInstanceHealth(instance)
+    instance.loadBalancers = lbs
     instance
   }
 
@@ -185,13 +256,7 @@ class CacheUtils {
 
   static CloudFoundryLoadBalancer translateLoadBalancer(CacheData loadBalancerEntry) {
     Map<String, String> lbKey = Keys.parse(loadBalancerEntry.id)
-    def route = new CloudRoute(
-        ProviderUtils.mapToMeta(loadBalancerEntry.attributes.nativeRoute.meta),
-        loadBalancerEntry.attributes.nativeRoute.host,
-        new CloudDomain(ProviderUtils.mapToMeta(loadBalancerEntry.attributes.nativeRoute.domain.meta), loadBalancerEntry.attributes.nativeRoute.domain.name, null),
-        loadBalancerEntry.attributes.nativeRoute.appsUsingRoute
-    )
-    new CloudFoundryLoadBalancer(name: lbKey.loadBalancer, account: lbKey.account, region: lbKey.region, nativeRoute: route)
+    new CloudFoundryLoadBalancer(name: lbKey.loadBalancer, domain: loadBalancerEntry.attributes.domain, account: lbKey.account, region: lbKey.region)
   }
 
 

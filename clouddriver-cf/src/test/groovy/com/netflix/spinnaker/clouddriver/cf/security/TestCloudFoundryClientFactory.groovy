@@ -17,18 +17,31 @@
 package com.netflix.spinnaker.clouddriver.cf.security
 
 import com.netflix.spinnaker.clouddriver.cf.utils.CloudFoundryClientFactory
-import org.cloudfoundry.client.lib.CloudFoundryOperations
-
+import org.cloudfoundry.client.CloudFoundryClient
+import org.cloudfoundry.operations.CloudFoundryOperations
+import org.springframework.cloud.deployer.spi.cloudfoundry.CloudFoundryAppDeployer
 /**
  * Stub CF client factory. Makes it possible to inject stub client.
  */
 class TestCloudFoundryClientFactory implements CloudFoundryClientFactory {
 
-  CloudFoundryOperations stubClient
+  CloudFoundryClient stubClient
+  CloudFoundryOperations stubOperations
+  CloudFoundryAppDeployer stubAppDeployer
 
   @Override
-  CloudFoundryOperations createCloudFoundryClient(CloudFoundryAccountCredentials credentials,
+  CloudFoundryClient createCloudFoundryClient(CloudFoundryAccountCredentials credentials,
                                                   boolean trustSelfSignedCerts) {
     stubClient
+  }
+
+  @Override
+  CloudFoundryOperations createCloudFoundryOperations(CloudFoundryAccountCredentials credentials, boolean trustSelfSignedCerts) {
+    stubOperations
+  }
+
+  @Override
+  CloudFoundryAppDeployer createCloudFoundryAppDeployer(CloudFoundryAccountCredentials credentials) {
+    stubAppDeployer
   }
 }

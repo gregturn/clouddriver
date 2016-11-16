@@ -19,18 +19,18 @@ package com.netflix.spinnaker.clouddriver.cf.model
 import com.netflix.spinnaker.clouddriver.model.HealthState
 import com.netflix.spinnaker.clouddriver.model.Instance
 import groovy.transform.EqualsAndHashCode
-import org.cloudfoundry.client.lib.domain.CloudApplication
-import org.cloudfoundry.client.lib.domain.InstanceInfo
-import org.cloudfoundry.client.lib.domain.InstanceState
+import org.cloudfoundry.operations.applications.InstanceDetail
 
 @EqualsAndHashCode(includes = ["name"])
 class CloudFoundryApplicationInstance implements Instance, Serializable {
 
   String name
   HealthState healthState
-  CloudApplication nativeApplication
   List<Map<String, String>> health = []
-  InstanceInfo nativeInstance
+  CloudFoundryServerGroup serverGroup
+  Collection<CloudFoundryLoadBalancer> loadBalancers = []
+  InstanceDetail nativeInstance
+  String space
   String consoleLink
   String logsLink
 
@@ -41,22 +41,23 @@ class CloudFoundryApplicationInstance implements Instance, Serializable {
 
   @Override
   String getZone() {
-    nativeApplication.space?.name
+    space
   }
 
-  static HealthState instanceStateToHealthState(InstanceState instanceState) {
+  static HealthState instanceStateToHealthState(String instanceState) {
+
     switch (instanceState) {
-      case InstanceState.DOWN:
+      case "DOWN":
         return HealthState.Down
-      case InstanceState.STARTING:
+      case "STARTING":
         return HealthState.Starting
-      case InstanceState.RUNNING:
+      case "RUNNING":
         return HealthState.Up
-      case InstanceState.CRASHED:
+      case "CRASHED":
         return HealthState.Down
-      case InstanceState.FLAPPING:
+      case "FLAPPING":
         return HealthState.Down
-      case InstanceState.UNKNOWN:
+      case "UNKNOWN":
         return HealthState.Unknown
     }
   }
