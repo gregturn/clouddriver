@@ -23,15 +23,17 @@ import com.netflix.spinnaker.clouddriver.google.model.GoogleDisk
 import com.netflix.spinnaker.clouddriver.google.model.GoogleInstanceTypeDisk
 import com.netflix.spinnaker.clouddriver.google.security.GoogleCredentialsInitializer
 import groovy.transform.ToString
-import org.springframework.beans.factory.config.ConfigurableBeanFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.EnableConfigurationProperties
-import org.springframework.context.annotation.*
+import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.ComponentScan
+import org.springframework.context.annotation.Configuration
+import org.springframework.context.annotation.Import
 import org.springframework.scheduling.annotation.EnableScheduling
 
 @Configuration
-@EnableConfigurationProperties
+@EnableConfigurationProperties(GoogleConfigurationProperties)
 @EnableScheduling
 @ConditionalOnProperty('google.enabled')
 @ComponentScan(["com.netflix.spinnaker.clouddriver.google"])
@@ -41,13 +43,6 @@ class GoogleConfiguration {
   private static final String DEFAULT_KEY = "default"
   private static final String DISK_TYPE = "pd-standard"
   private static final long DISK_SIZE_GB = 10
-
-  @Scope(ConfigurableBeanFactory.SCOPE_PROTOTYPE)
-  @Bean
-  @ConfigurationProperties("google")
-  GoogleConfigurationProperties googleConfigurationProperties() {
-    new GoogleConfigurationProperties()
-  }
 
   @Bean
   GoogleHealthIndicator googleHealthIndicator() {

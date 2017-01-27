@@ -21,6 +21,7 @@ import com.netflix.spinnaker.clouddriver.googlecommon.config.GoogleCommonManaged
 import com.squareup.okhttp.OkHttpClient
 import groovy.json.JsonSlurper
 import groovy.transform.ToString
+import org.springframework.boot.context.properties.ConfigurationProperties
 import retrofit.RestAdapter
 import retrofit.client.OkClient
 import retrofit.client.Response
@@ -28,7 +29,19 @@ import retrofit.http.GET
 import retrofit.http.Headers
 import retrofit.mime.TypedByteArray
 
+@ConfigurationProperties("appengine")
 class AppengineConfigurationProperties {
+
+  long safeRetryMaxWaitIntervalMs = 60000
+
+  long safeRetryRetryIntervalBaseSec = 2
+
+  long safeRetryJitterMultiplier = 1000
+
+  long safeRetryMaxRetries = 10
+
+  long jobSleepMs = 1000
+
   @ToString(includeNames = true)
   static class ManagedAccount extends GoogleCommonManagedAccount {
     static final String metadataUrl = "http://metadata.google.internal/computeMetadata/v1"

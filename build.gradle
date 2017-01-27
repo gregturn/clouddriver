@@ -16,7 +16,7 @@
 
 buildscript {
   ext {
-    springBootVersion = "1.2.8.RELEASE"
+    springBootVersion = "1.4.3.RELEASE"
   }
   repositories {
     jcenter()
@@ -35,13 +35,14 @@ allprojects {
   apply plugin: 'groovy'
 
   ext {
-    spinnakerDependenciesVersion = project.hasProperty('spinnakerDependenciesVersion') ? project.property('spinnakerDependenciesVersion') : '0.84.0'
+    spinnakerDependenciesVersion = project.hasProperty('spinnakerDependenciesVersion') ? project.property('spinnakerDependenciesVersion') : '0.85.0-SNAPSHOT'
   }
 
   def checkLocalVersions = [spinnakerDependenciesVersion: spinnakerDependenciesVersion]
   if (ext.has('versions')) {
     def extVers = ext.get('versions')
     if (extVers instanceof Map) {
+      print extVers
       checkLocalVersions.putAll(extVers)
     }
   }
@@ -78,39 +79,8 @@ allprojects {
     minHeapSize = "512m"
     maxHeapSize = "512m"
   }
-}
 
-subprojects { project ->
-
-  configurations {
-    all {
-      exclude group: 'javax.servlet', module: 'servlet-api'
-      exclude group: 'javax.ws.rs', module: 'jsr311-api'
-      resolutionStrategy {
-        force 'org.antlr:antlr-runtime:3.5.2'
-        eachDependency {
-          if (it.requested.group == 'asm' || it.requested.group == 'org.ow2.asm') {
-            it.useTarget group: 'org.ow2.asm', name: 'asm-all', version: '5.0.3'
-          }
-          if (it.requested.group == 'junit') {
-            it.useTarget group: 'junit', name: 'junit', version: '4.12'
-          }
-          if (it.requested.group == 'cglib' || it.requested.name == 'cglib') {
-            it.useTarget group: 'cglib', name: 'cglib', version: '3.2.0'
-          }
-          if (it.requested.group == 'com.google.guava') {
-            it.useTarget group: 'com.google.guava', name: 'guava', version: '18.0'
-          }
-          if (it.requested.group == 'antlr') {
-            it.useTarget group: 'org.antlr', name: it.requested.name, version: '3.5.2'
-          }
-          if (it.requested.group == 'org.apache.xbean') {
-            it.useVersion '4.3'
-          }
-        }
-      }
-    }
-  }
+  apply from: "${rootProject.projectDir}/configurations-all.gradle"
 
   dependencies {
     compile spinnaker.dependency('groovy')

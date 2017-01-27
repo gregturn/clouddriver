@@ -10,11 +10,7 @@ tasks.withType(org.springframework.boot.gradle.run.BootRunTask) {
   systemProperty('spring.config.location', project.springConfigLocation)
 }
 
-configurations.all {
-  exclude group: 'javax.servlet', module: 'servlet-api'
-  exclude group: "org.slf4j", module: "slf4j-log4j12"
-  resolutionStrategy.force 'com.microsoft.rest:client-runtime:1.0.0-20160309.002843-19'
-}
+apply from: "${rootProject.projectDir}/configurations-all.gradle"
 
 repositories {
   maven { url "http://adxsnapshots.azurewebsites.net" }
@@ -35,19 +31,16 @@ dependencies {
 
 //  Replace below with this line when fiat becomes stable.
 //  spinnaker.group "fiat"
-  compile "org.springframework.boot:spring-boot-starter-actuator:1.2.8.RELEASE"
-  compile "org.springframework.boot:spring-boot-starter-web:1.2.8.RELEASE"
-  compile "org.springframework.boot:spring-boot-starter-data-rest:1.2.8.RELEASE"
-  compile "org.springframework.security:spring-security-config:3.2.9.RELEASE"
-  compile "org.springframework.security:spring-security-core:3.2.9.RELEASE"
-  compile "org.springframework.security:spring-security-web:3.2.9.RELEASE"
 
   runtime spinnaker.dependency('kork')
   compile spinnaker.dependency('korkWeb')
   compile spinnaker.dependency('korkStackdriver')
   compile spinnaker.dependency('korkSwagger')
   compile spinnaker.dependency('bootActuator')
-  compile spinnaker.dependency('bootDataRest')
+  compile spinnaker.dependency('bootWeb')
+  compile spinnaker.dependency('springSecurityConfig')
+  compile spinnaker.dependency('springSecurityCore')
+  compile spinnaker.dependency('springSecurityWeb')
   testCompile ("org.springframework.boot:spring-boot-starter-test")
   //this brings in the jetty GzipFilter which boot will autoconfigure
   runtime 'org.eclipse.jetty:jetty-servlets:9.2.11.v20150529'

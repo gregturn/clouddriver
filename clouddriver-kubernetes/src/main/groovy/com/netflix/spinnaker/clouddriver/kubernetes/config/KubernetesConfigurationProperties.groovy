@@ -17,9 +17,14 @@
 package com.netflix.spinnaker.clouddriver.kubernetes.config
 
 import groovy.transform.ToString
+import org.springframework.boot.context.properties.ConfigurationProperties
 
+@ConfigurationProperties("kubernetes")
 @ToString(includeNames = true)
 class KubernetesConfigurationProperties {
+
+  String defaultRegistry = 'gcr.io'
+
   @ToString(includeNames = true)
   static class ManagedAccount {
     String name

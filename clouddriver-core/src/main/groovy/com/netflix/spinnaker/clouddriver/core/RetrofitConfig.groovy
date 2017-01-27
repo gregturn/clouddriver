@@ -27,6 +27,7 @@ import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Scope
 import retrofit.RequestInterceptor
 import retrofit.RestAdapter
+import retrofit.RestAdapter.LogLevel
 import retrofit.client.OkClient
 import retrofit.converter.JacksonConverter
 
@@ -56,5 +57,11 @@ class RetrofitConfig {
       .setLog(new Slf4jRetrofitLogger(Front50Service))
       .build()
       .create(Front50Service)
+  }
+
+  @Bean
+  @ConditionalOnProperty(name = 'services.front50.enabled', matchIfMissing = true)
+  LogLevel logLevel() {
+    return LogLevel.BASIC
   }
 }

@@ -18,8 +18,8 @@ dependencies {
   compile 'com.microsoft.rest:client-runtime:1.0.0-20160309.002843-19'
 }
 
-configurations.all {
-  resolutionStrategy.force 'com.microsoft.rest:client-runtime:1.0.0-20160309.002843-19'
-}
+//configurations.all {
+//  resolutionStrategy.force 'com.microsoft.rest:client-runtime:1.0.0-20160309.002843-19'
+//}
 
 

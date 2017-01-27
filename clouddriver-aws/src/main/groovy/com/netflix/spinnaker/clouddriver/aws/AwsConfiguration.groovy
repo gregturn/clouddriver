@@ -19,7 +19,7 @@ package com.netflix.spinnaker.clouddriver.aws
 import com.amazonaws.retry.RetryPolicy.BackoffStrategy
 import com.amazonaws.retry.RetryPolicy.RetryCondition
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.netflix.awsobjectmapper.AmazonObjectMapper
+import com.netflix.awsobjectmapper.AmazonObjectMapperConfigurer
 import com.netflix.spectator.api.Registry
 import com.netflix.spinnaker.cats.agent.Agent
 import com.netflix.spinnaker.cats.provider.ProviderSynchronizerTypeWrapper
@@ -67,6 +67,7 @@ import org.springframework.context.annotation.ComponentScan
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.DependsOn
 import org.springframework.context.annotation.Import
+import org.springframework.context.annotation.Primary
 import org.springframework.context.annotation.Scope
 
 import java.util.concurrent.ConcurrentHashMap
@@ -74,7 +75,7 @@ import java.util.concurrent.ConcurrentHashMap
 @Configuration
 @ConditionalOnProperty('aws.enabled')
 @ComponentScan(["com.netflix.spinnaker.clouddriver.aws"])
-@EnableConfigurationProperties(AwsConfigurationProperties)
+@EnableConfigurationProperties([AwsConfigurationProperties, DefaultConfigurationProperties])
 @Import([
   BastionConfig,
   AmazonCredentialsInitializer,
@@ -110,9 +111,10 @@ class AwsConfiguration {
       .build()
   }
 
+  @Primary
   @Bean
   ObjectMapper amazonObjectMapper() {
-    return new AmazonObjectMapper()
+    AmazonObjectMapperConfigurer.createConfigured()
   }
 
   @Bean

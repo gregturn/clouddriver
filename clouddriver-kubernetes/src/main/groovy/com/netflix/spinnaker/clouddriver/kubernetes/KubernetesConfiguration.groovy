@@ -20,26 +20,21 @@ import com.netflix.spinnaker.clouddriver.kubernetes.config.KubernetesConfigurati
 import com.netflix.spinnaker.clouddriver.kubernetes.deploy.KubernetesUtil
 import com.netflix.spinnaker.clouddriver.kubernetes.health.KubernetesHealthIndicator
 import com.netflix.spinnaker.clouddriver.kubernetes.security.KubernetesCredentialsInitializer
-import org.springframework.beans.factory.config.ConfigurableBeanFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
-import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.EnableConfigurationProperties
-import org.springframework.context.annotation.*
+import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.ComponentScan
+import org.springframework.context.annotation.Configuration
+import org.springframework.context.annotation.Import
 import org.springframework.scheduling.annotation.EnableScheduling
 
 @Configuration
-@EnableConfigurationProperties
+@EnableConfigurationProperties(KubernetesConfigurationProperties)
 @EnableScheduling
 @ConditionalOnProperty('kubernetes.enabled')
 @ComponentScan(["com.netflix.spinnaker.clouddriver.kubernetes"])
 @Import([ KubernetesCredentialsInitializer ])
 class KubernetesConfiguration {
-  @Scope(ConfigurableBeanFactory.SCOPE_PROTOTYPE)
-  @Bean
-  @ConfigurationProperties("kubernetes")
-  KubernetesConfigurationProperties kubernetesConfigurationProperties() {
-    new KubernetesConfigurationProperties()
-  }
 
   @Bean
   KubernetesHealthIndicator kubernetesHealthIndicator() {
@@ -47,7 +42,7 @@ class KubernetesConfiguration {
   }
 
   @Bean
-  KubernetesUtil kubernetesUtil() {
-    new KubernetesUtil()
+  KubernetesUtil kubernetesUtil(KubernetesConfigurationProperties kubernetesConfigurationProperties) {
+    new KubernetesUtil(kubernetesConfigurationProperties: kubernetesConfigurationProperties)
   }
 }

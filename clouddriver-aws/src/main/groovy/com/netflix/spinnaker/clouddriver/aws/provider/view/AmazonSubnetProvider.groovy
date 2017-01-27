@@ -18,7 +18,6 @@ package com.netflix.spinnaker.clouddriver.aws.provider.view
 
 import com.amazonaws.services.ec2.model.Subnet
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.netflix.awsobjectmapper.AmazonObjectMapper
 import com.netflix.spinnaker.cats.cache.Cache
 import com.netflix.spinnaker.cats.cache.CacheData
 import com.netflix.spinnaker.cats.cache.RelationshipCacheFilter
@@ -38,12 +37,12 @@ class AmazonSubnetProvider implements SubnetProvider<AmazonSubnet> {
   private static final String DEPRECATED_TAG_KEY = 'is_deprecated'
 
   private final Cache cacheView
-  private final AmazonObjectMapper objectMapper
+  private final ObjectMapper objectMapper
 
   final String cloudProvider = AmazonCloudProvider.ID
 
   @Autowired
-  AmazonSubnetProvider(Cache cacheView, AmazonObjectMapper objectMapper) {
+  AmazonSubnetProvider(Cache cacheView, ObjectMapper objectMapper) {
     this.cacheView = cacheView
     this.objectMapper = objectMapper
   }

@@ -16,12 +16,13 @@
 
 package com.netflix.spinnaker.clouddriver.jobs.local
 
+import com.netflix.spinnaker.clouddriver.jobs.JobConfigurationProperties
 import com.netflix.spinnaker.clouddriver.jobs.JobExecutor
 import com.netflix.spinnaker.clouddriver.jobs.JobRequest
 import com.netflix.spinnaker.clouddriver.jobs.JobStatus
 import groovy.util.logging.Slf4j
 import org.apache.commons.exec.*
-import org.springframework.beans.factory.annotation.Value
+import org.springframework.beans.factory.InitializingBean
 import rx.Scheduler
 import rx.functions.Action0
 import rx.schedulers.Schedulers
@@ -29,13 +30,14 @@ import rx.schedulers.Schedulers
 import java.util.concurrent.ConcurrentHashMap
 
 @Slf4j
-class JobExecutorLocal implements JobExecutor {
+class JobExecutorLocal implements JobExecutor, InitializingBean {
 
-  @Value('${jobs.local.timeoutMinutes:10}')
   long timeoutMinutes
 
   Scheduler scheduler = Schedulers.computation()
   Map<String, Map> jobIdToHandlerMap = new ConcurrentHashMap<String, Map>()
+
+  JobConfigurationProperties jobConfigurationProperties
 
   @Override
   String startJob(JobRequest jobRequest, Map<String, String> environment, InputStream inputStream) {
@@ -167,5 +169,10 @@ class JobExecutorLocal implements JobExecutor {
     canceledJob?.watchdog?.destroyProcess()
 
     // The next polling interval will be unable to retrieve the job status and will mark it as canceled.
+  }
+
+  @Override
+  void afterPropertiesSet() throws Exception {
+    this.timeoutMinutes = jobConfigurationProperties.local.timeoutMinutes
   }
 }

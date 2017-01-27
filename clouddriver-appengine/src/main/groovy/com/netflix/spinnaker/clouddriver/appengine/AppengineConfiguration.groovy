@@ -31,7 +31,7 @@ import org.springframework.context.annotation.Scope
 import org.springframework.scheduling.annotation.EnableScheduling
 
 @Configuration
-@EnableConfigurationProperties
+@EnableConfigurationProperties(AppengineConfigurationProperties)
 @EnableScheduling
 @ConditionalOnProperty("appengine.enabled")
 @ComponentScan(["com.netflix.spinnaker.clouddriver.appengine"])

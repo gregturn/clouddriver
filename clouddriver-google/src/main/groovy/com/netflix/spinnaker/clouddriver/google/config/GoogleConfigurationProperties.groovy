@@ -19,7 +19,9 @@ package com.netflix.spinnaker.clouddriver.google.config
 import com.netflix.spinnaker.clouddriver.consul.config.ConsulConfig
 import com.netflix.spinnaker.clouddriver.googlecommon.config.GoogleCommonManagedAccount
 import groovy.transform.ToString
+import org.springframework.boot.context.properties.ConfigurationProperties
 
+@ConfigurationProperties("google")
 class GoogleConfigurationProperties {
   public static final int ASYNC_OPERATION_TIMEOUT_SECONDS_DEFAULT = 300
   public static final int ASYNC_OPERATION_MAX_POLLING_INTERVAL_SECONDS = 8
@@ -36,4 +38,8 @@ class GoogleConfigurationProperties {
   int asyncOperationMaxPollingIntervalSeconds = ASYNC_OPERATION_MAX_POLLING_INTERVAL_SECONDS
   List<String> baseImageProjects
   long maxMIGPageSize = 50
+  long safeRetryMaxWaitIntervalMs = 60000
+  long safeRetryRetryIntervalBaseSec = 2
+  long safeRetryJitterMultiplier = 1000
+  long safeRetryMaxRetries = 10
 }

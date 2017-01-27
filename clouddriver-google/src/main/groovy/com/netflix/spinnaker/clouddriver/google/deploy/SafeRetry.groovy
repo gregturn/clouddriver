@@ -18,28 +18,34 @@ package com.netflix.spinnaker.clouddriver.google.deploy
 
 import com.netflix.spectator.api.Registry
 import com.netflix.spinnaker.clouddriver.data.task.Task
+import com.netflix.spinnaker.clouddriver.google.config.GoogleConfigurationProperties
 import com.netflix.spinnaker.clouddriver.google.deploy.exception.GoogleOperationException
 import com.netflix.spinnaker.clouddriver.googlecommon.deploy.GoogleCommonSafeRetry
+import org.springframework.beans.factory.InitializingBean
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
-import java.util.concurrent.TimeUnit
-
 // TODO(jacobkiefer): This used to have a generic return type associated with 'doRetry'. Find a way to reincorporate while still making this a Bean.
 @Component
-class SafeRetry extends GoogleCommonSafeRetry {
+class SafeRetry extends GoogleCommonSafeRetry implements InitializingBean {
 
-  @Value('${google.safeRetryMaxWaitIntervalMs:60000}')
   Long maxWaitInterval
 
-  @Value('${google.safeRetryRetryIntervalBaseSec:2}')
   Long retryIntervalBase
 
-  @Value('${google.safeRetryJitterMultiplier:1000}')
   Long jitterMultiplier
 
-  @Value('${google.safeRetryMaxRetries:10}')
   Long maxRetries
+
+  @Autowired
+  GoogleConfigurationProperties googleConfigurationProperties
+
+  @Override
+  void afterPropertiesSet() throws Exception {
+    this.maxWaitInterval = googleConfigurationProperties.safeRetryMaxWaitIntervalMs
+    this.retryIntervalBase = googleConfigurationProperties.safeRetryRetryIntervalBaseSec
+    this.jitterMultiplier = googleConfigurationProperties.safeRetryJitterMultiplier
+    this.maxWaitInterval = googleConfigurationProperties.safeRetryMaxRetries
+  }
 
   public Object doRetry(Closure operation,
                         String resource,

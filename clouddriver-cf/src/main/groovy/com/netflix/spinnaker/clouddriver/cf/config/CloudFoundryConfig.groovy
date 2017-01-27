@@ -33,16 +33,11 @@ import org.springframework.scheduling.annotation.EnableScheduling
  * Configuration for Cloud Foundry provider.
  */
 @Configuration
-@EnableConfigurationProperties
+@EnableConfigurationProperties(CloudFoundryConfigurationProperties)
 @EnableScheduling
 @ConditionalOnProperty('cf.enabled')
 @ComponentScan(["com.netflix.spinnaker.clouddriver.cf"])
 class CloudFoundryConfig {
-
-	@Bean
-	CloudFoundryConfigurationProperties cfConfigurationProperties() {
-		new CloudFoundryConfigurationProperties();
-	}
 
 	@Bean
 	CloudFoundryCredentialsInitializer cloudFoundryCredentialsInitializer() {

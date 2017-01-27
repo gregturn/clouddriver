@@ -30,17 +30,16 @@ import com.netflix.spinnaker.clouddriver.security.AccountCredentialsRepository
 import com.netflix.spinnaker.clouddriver.security.ProviderUtils
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.config.ConfigurableBeanFactory
-import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.*
 
 import java.util.concurrent.ConcurrentHashMap
 
 @Configuration
 @Import(GoogleConfiguration)
-@EnableConfigurationProperties
 class GoogleInfrastructureProviderConfig {
 
-  @Autowired Registry registry
+  @Autowired
+  Registry registry
 
   @Bean
   @DependsOn('googleNamedAccountCredentials')

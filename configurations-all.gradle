@@ -1,0 +1,101 @@
+/**
+ * Common version settings shared by all modules. This needs to be pulled into both the parent
+ * project as well as clouddriver-web to ensure consistent versioning.
+ *
+ * Uses spinnaker-dependencies to look up most versions.
+ */
+configurations {
+	all {
+		exclude group: 'javax.servlet', module: 'servlet-api'
+		exclude group: 'javax.ws.rs', module: 'jsr311-api'
+		resolutionStrategy {
+			force 'org.antlr:antlr-runtime:3.5.2'
+			force 'com.microsoft.rest:client-runtime:1.0.0-20160309.002843-19'
+			eachDependency {
+				if (it.requested.group == 'asm' || it.requested.group == 'org.ow2.asm') {
+					it.useTarget group: 'org.ow2.asm', name: 'asm-all', version: '5.0.3'
+				}
+				if (it.requested.group == 'junit') {
+					it.useTarget group: 'junit', name: 'junit', version: spinnaker.version('junit')
+				}
+				if (it.requested.group == 'cglib' || it.requested.name == 'cglib') {
+					it.useTarget group: 'cglib', name: 'cglib', version: '3.2.0'
+				}
+				if (it.requested.group == 'com.google.guava') {
+					it.useTarget group: 'com.google.guava', name: 'guava', version: '18.0'
+				}
+				if (it.requested.group == 'antlr') {
+					it.useTarget group: 'org.antlr', name: it.requested.name, version: '3.5.2'
+				}
+				if (it.requested.group == 'org.apache.xbean') {
+					it.useVersion '4.3'
+				}
+
+				if (it.requested.group == 'com.netflix.spinnaker.fiat') {
+					it.useVersion '0.22.0-SNAPSHOT'
+				}
+
+				if (it.requested.group == 'org.springframework') {
+					it.useVersion spinnaker.version('spring')
+				}
+				if (it.requested.group == 'org.springframework.boot') {
+					it.useVersion spinnaker.version('springBoot')
+				}
+				if (it.requested.group == 'org.springframework.security') {
+					it.useVersion spinnaker.version('springSecurity')
+				}
+				if (it.requested.group == 'com.fasterxml' && it.requested.name == 'classmate') {
+					it.useVersion spinnaker.version('classmate')
+				}
+				if (it.requested.group == 'redis.clients') {
+					it.useVersion spinnaker.version('jedis')
+				}
+				if (it.requested.group == 'org.apache.httpcomponents' && it.requested.name == 'httpasyncclient') {
+					it.useVersion spinnaker.version('httpAsyncClient')
+				}
+				if (it.requested.group == 'org.apache.httpcomponents' && it.requested.name == 'httpclient') {
+					it.useVersion spinnaker.version('httpclient')
+				}
+				if (it.requested.group == 'org.apache.httpcomponents' && it.requested.name == 'httpcore') {
+					it.useVersion spinnaker.version('httpcore')
+				}
+				if (it.requested.group.startsWith('com.fasterxml.jackson')) {
+					it.useVersion spinnaker.version('jackson')
+				}
+				if (it.requested.group == 'com.google.code.gson') {
+					it.useVersion spinnaker.version('gson')
+				}
+				if (it.requested.name == 'commons-cli') {
+					it.useVersion spinnaker.version('commonsCli')
+				}
+				if (it.requested.name == 'commons-codec') {
+					it.useVersion spinnaker.version('commonsCodec')
+				}
+				if (it.requested.group == 'commons-io' && it.requested.name == 'commons-io') {
+					it.useVersion spinnaker.version('commonsIo')
+				}
+				if (it.requested.name == 'commons-lang') {
+					it.useVersion spinnaker.version('commonsLang')
+				}
+				if (it.requested.name == 'commons-lang3') {
+					it.useVersion spinnaker.version('commonsLang3')
+				}
+				if (it.requested.name == 'commons-logging') {
+					it.useVersion spinnaker.version('commonsLogging')
+				}
+				if (it.requested.name == 'commons-net') {
+					it.useVersion spinnaker.version('commonsNet')
+				}
+				if (it.requested.name == 'commons-pool2') {
+					it.useVersion spinnaker.version('commonsPool2')
+				}
+				if (it.requested.name == 'joda-time') {
+					it.useVersion spinnaker.version('jodaTime')
+				}
+				if (it.requested.group.startsWith('org.apache.tomcat')) {
+					it.useVersion '8.0.24'
+				}
+			}
+		}
+	}
+}

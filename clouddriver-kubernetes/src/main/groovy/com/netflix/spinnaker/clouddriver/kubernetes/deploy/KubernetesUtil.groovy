@@ -18,6 +18,7 @@ package com.netflix.spinnaker.clouddriver.kubernetes.deploy
 
 import com.netflix.frigga.NameValidation
 import com.netflix.frigga.Names
+import com.netflix.spinnaker.clouddriver.kubernetes.config.KubernetesConfigurationProperties
 import com.netflix.spinnaker.clouddriver.kubernetes.deploy.description.servergroup.KubernetesImageDescription
 import com.netflix.spinnaker.clouddriver.kubernetes.deploy.exception.KubernetesIllegalArgumentException
 import com.netflix.spinnaker.clouddriver.kubernetes.security.KubernetesCredentials
@@ -25,18 +26,23 @@ import io.fabric8.kubernetes.api.model.Pod
 import io.fabric8.kubernetes.api.model.ReplicationController
 import io.fabric8.kubernetes.api.model.extensions.Job
 import io.fabric8.kubernetes.api.model.extensions.ReplicaSet
-import org.springframework.beans.factory.annotation.Value
+import org.springframework.beans.factory.InitializingBean
+import org.springframework.beans.factory.annotation.Autowired
 
-class KubernetesUtil {
+class KubernetesUtil implements InitializingBean {
+
   static String SECURITY_GROUP_LABEL_PREFIX = "security-group-"
   static String LOAD_BALANCER_LABEL_PREFIX = "load-balancer-"
   static String SERVER_GROUP_LABEL = "replication-controller"
   static String SERVER_GROUP_KIND = "replicaSet"
   static String JOB_LABEL = "job"
-  @Value("kubernetes.defaultRegistry:gcr.io")
   static String DEFAULT_REGISTRY
+
   private static int SECURITY_GROUP_LABEL_PREFIX_LENGTH = SECURITY_GROUP_LABEL_PREFIX.length()
   private static int LOAD_BALANCER_LABEL_PREFIX_LENGTH = LOAD_BALANCER_LABEL_PREFIX.length()
+
+  @Autowired
+  private KubernetesConfigurationProperties kubernetesConfigurationProperties
 
   static String getNextSequence(String clusterName, String namespace, KubernetesCredentials credentials) {
     def maxSeqNumber = -1
@@ -187,5 +193,16 @@ class KubernetesUtil {
     }
 
     return appName;
+  }
+
+  /**
+   * NOTE: This may be an instance value assigned to a static, but the Spring container
+   * ensures there will only be one such bean created.
+   *
+   * @throws Exception
+   */
+  @Override
+  void afterPropertiesSet() throws Exception {
+    DEFAULT_REGISTRY = this.kubernetesConfigurationProperties.defaultRegistry
   }
 }

@@ -17,25 +17,35 @@
 package com.netflix.spinnaker.clouddriver.appengine.deploy
 
 import com.netflix.spectator.api.Registry
+import com.netflix.spinnaker.clouddriver.appengine.config.AppengineConfigurationProperties
 import com.netflix.spinnaker.clouddriver.appengine.deploy.exception.AppengineOperationException
 import com.netflix.spinnaker.clouddriver.data.task.Task
 import com.netflix.spinnaker.clouddriver.googlecommon.deploy.GoogleCommonSafeRetry
-import org.springframework.beans.factory.annotation.Value
+import org.springframework.beans.factory.InitializingBean
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Component
 
 @Component
-class AppengineSafeRetry extends GoogleCommonSafeRetry {
-  @Value('${appengine.safeRetryMaxWaitIntervalMs:60000}')
+class AppengineSafeRetry extends GoogleCommonSafeRetry implements InitializingBean {
+
   Long maxWaitInterval
 
-  @Value('${appengine.safeRetryRetryIntervalBaseSec:2}')
   Long retryIntervalBase
 
-  @Value('${appengine.safeRetryJitterMultiplier:1000}')
   Long jitterMultiplier
 
-  @Value('${appengine.safeRetryMaxRetries:10}')
   Long maxRetries
+
+  @Autowired
+  AppengineConfigurationProperties appEngineConfigurationProperties
+
+  @Override
+  void afterPropertiesSet() throws Exception {
+    this.maxWaitInterval = appEngineConfigurationProperties.safeRetryMaxWaitIntervalMs
+    this.retryIntervalBase = appEngineConfigurationProperties.safeRetryRetryIntervalBaseSec
+    this.jitterMultiplier = appEngineConfigurationProperties.safeRetryJitterMultiplier
+    this.maxRetries = appEngineConfigurationProperties.safeRetryMaxRetries
+  }
 
   public Object doRetry(Closure operation,
                         String resource,

@@ -16,20 +16,27 @@
 
 package com.netflix.spinnaker.clouddriver.appengine
 
+import com.netflix.spinnaker.clouddriver.appengine.config.AppengineConfigurationProperties
 import com.netflix.spinnaker.clouddriver.jobs.JobExecutor
 import com.netflix.spinnaker.clouddriver.jobs.JobRequest
 import com.netflix.spinnaker.clouddriver.jobs.JobStatus
+import org.springframework.beans.factory.InitializingBean
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 
 @Component
-class AppengineJobExecutor {
-  @Value('${appengine.jobSleepMs:1000}')
-  Long sleepMs
+class AppengineJobExecutor implements InitializingBean {
+
+  @Autowired
+  private AppengineConfigurationProperties appEngineConfigurationProperties
 
   @Autowired
   JobExecutor jobExecutor
+
+  @Override
+  void afterPropertiesSet() throws Exception {
+    this.sleepMs = appEngineConfigurationProperties.jobSleepMs
+  }
 
   void runCommand(List<String> command) {
     String jobId = jobExecutor.startJob(new JobRequest(tokenizedCommand: command),

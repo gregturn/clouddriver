@@ -22,19 +22,23 @@ import com.netflix.spinnaker.cats.cache.CacheData
 import com.netflix.spinnaker.cats.cache.CacheFilter
 import com.netflix.spinnaker.cats.cache.RelationshipCacheFilter
 import com.netflix.spinnaker.clouddriver.aws.AmazonCloudProvider
+import com.netflix.spinnaker.clouddriver.aws.DefaultConfigurationProperties
+import com.netflix.spinnaker.clouddriver.aws.data.Keys
+import com.netflix.spinnaker.clouddriver.aws.model.AmazonCluster
+import com.netflix.spinnaker.clouddriver.aws.model.AmazonInstance
+import com.netflix.spinnaker.clouddriver.aws.model.AmazonLoadBalancer
+import com.netflix.spinnaker.clouddriver.aws.model.AmazonServerGroup
+import com.netflix.spinnaker.clouddriver.aws.provider.AwsProvider
 import com.netflix.spinnaker.clouddriver.core.provider.agent.ExternalHealthProvider
 import com.netflix.spinnaker.clouddriver.model.ClusterProvider
-import com.netflix.spinnaker.clouddriver.aws.data.Keys
-import com.netflix.spinnaker.clouddriver.aws.model.*
-import com.netflix.spinnaker.clouddriver.aws.provider.AwsProvider
+import org.springframework.beans.factory.InitializingBean
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 
 import static com.netflix.spinnaker.clouddriver.core.provider.agent.Namespace.*
 
 @Component
-class AmazonClusterProvider implements ClusterProvider<AmazonCluster> {
+class AmazonClusterProvider implements ClusterProvider<AmazonCluster>, InitializingBean {
 
   private final AmazonCloudProvider amazonCloudProvider
   private final Cache cacheView
@@ -43,14 +47,17 @@ class AmazonClusterProvider implements ClusterProvider<AmazonCluster> {
   @Autowired(required = false)
   List<ExternalHealthProvider> externalHealthProviders
 
-  @Value('${default.build.host:http://builds.netflix.com/}')
   String defaultBuildHost
 
+  private final DefaultConfigurationProperties defaultConfigurationProperties
+
   @Autowired
-  AmazonClusterProvider(AmazonCloudProvider amazonCloudProvider, Cache cacheView, AwsProvider awsProvider) {
+  AmazonClusterProvider(AmazonCloudProvider amazonCloudProvider, Cache cacheView, AwsProvider awsProvider,
+                        DefaultConfigurationProperties defaultConfigurationProperties) {
     this.amazonCloudProvider = amazonCloudProvider
     this.cacheView = cacheView
     this.awsProvider = awsProvider
+    this.defaultConfigurationProperties = defaultConfigurationProperties
   }
 
   @Override
@@ -316,5 +323,10 @@ class AmazonClusterProvider implements ClusterProvider<AmazonCluster> {
     } else {
       translateClusters([cluster], true)[0]
     }
+  }
+
+  @Override
+  void afterPropertiesSet() throws Exception {
+    this.defaultBuildHost = defaultConfigurationProperties.build.host
   }
 }
