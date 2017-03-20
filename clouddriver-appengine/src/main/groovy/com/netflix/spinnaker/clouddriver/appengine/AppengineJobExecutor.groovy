@@ -20,23 +20,17 @@ import com.netflix.spinnaker.clouddriver.appengine.config.AppengineConfiguration
 import com.netflix.spinnaker.clouddriver.jobs.JobExecutor
 import com.netflix.spinnaker.clouddriver.jobs.JobRequest
 import com.netflix.spinnaker.clouddriver.jobs.JobStatus
-import org.springframework.beans.factory.InitializingBean
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Component
 
 @Component
-class AppengineJobExecutor implements InitializingBean {
+class AppengineJobExecutor {
 
   @Autowired
   private AppengineConfigurationProperties appEngineConfigurationProperties
 
   @Autowired
   JobExecutor jobExecutor
-
-  @Override
-  void afterPropertiesSet() throws Exception {
-    this.sleepMs = appEngineConfigurationProperties.jobSleepMs
-  }
 
   void runCommand(List<String> command) {
     String jobId = jobExecutor.startJob(new JobRequest(tokenizedCommand: command),
@@ -46,10 +40,10 @@ class AppengineJobExecutor implements InitializingBean {
   }
 
   void waitForJobCompletion(String jobId) {
-    sleep(sleepMs)
+    sleep(appEngineConfigurationProperties.jobSleepMs)
     JobStatus jobStatus = jobExecutor.updateJob(jobId)
     while (jobStatus.state == JobStatus.State.RUNNING) {
-      sleep(sleepMs)
+      sleep(appEngineConfigurationProperties.jobSleepMs)
       jobStatus = jobExecutor.updateJob(jobId)
     }
     if (jobStatus.result == JobStatus.Result.FAILURE && jobStatus.stdOut) {
